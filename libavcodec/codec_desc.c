@@ -1977,6 +1977,14 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .long_name = NULL_IF_CONFIG_SMALL("RealVideo 6.0"),
         .props     = AV_CODEC_PROP_LOSSY | AV_CODEC_PROP_REORDER,
     },
+    {
+        .id        = AV_CODEC_ID_APV,
+        .type      = AVMEDIA_TYPE_VIDEO,
+        .name      = "apv",
+        .long_name = NULL_IF_CONFIG_SMALL("Advanced Professional Video (APV) Codec"),
+        .props     = AV_CODEC_PROP_LOSSY | AV_CODEC_PROP_REORDER,
+        .profiles  = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
+    },
 
     /* various PCM "codecs" */
     {
