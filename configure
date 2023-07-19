@@ -2557,6 +2557,7 @@ CONFIG_EXTRA="
     aandcttables
     ac3dsp
     adts_header
+    apvparse
     atsc_a53
     audio_frame_queue
     audiodsp
