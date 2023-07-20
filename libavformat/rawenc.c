@@ -117,6 +117,19 @@ const FFOutputFormat ff_aptx_hd_muxer = {
 };
 #endif
 
+#if CONFIG_APV_MUXER
+const FFOutputFormat ff_apv_muxer = {
+    .p.name            = "apv",
+    .p.long_name       = NULL_IF_CONFIG_SMALL("raw APV video"),
+    .p.extensions      = "apv",
+    .p.audio_codec     = AV_CODEC_ID_NONE,
+    .p.video_codec     = AV_CODEC_ID_APV,
+    .init              = force_one_stream,
+    .write_packet      = ff_raw_write_packet,
+    .p.flags           = AVFMT_NOTIMESTAMPS,
+};
+#endif
+
 #if CONFIG_AVS2_MUXER
 const FFOutputFormat ff_avs2_muxer = {
     .p.name            = "avs2",
