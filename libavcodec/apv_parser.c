@@ -27,13 +27,13 @@
 
 typedef struct APVParserContext {
     APVParamSets ps;
-    
+
     int parsed_extradata;
 } APVParserContext;
 
 // @see WD1_APV_spec section 7.2
 static int parse_frame_data(AVCodecParserContext *s, AVCodecContext *avctx,
-                          const uint8_t *buf, int buf_size)
+                            const uint8_t *buf, int buf_size)
 {
     APVParserContext *ctx = s->priv_data;
     GetBitContext gb;
@@ -48,7 +48,7 @@ static int parse_frame_data(AVCodecParserContext *s, AVCodecContext *avctx,
     if (ret < 0)
         return ret;
 
-    ff_apv_parse_frame_data(&gb, &ctx->ps);
+    ff_apv_parse_frame_data(&gb, &ctx->ps.frame_data);
 
     return 0;
 }
