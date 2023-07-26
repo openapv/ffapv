@@ -48,6 +48,6 @@ static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_si
 }
 
 // @see WD1_APV_spec section 7.3.1 Frame Data syntax
-int ff_apv_parse_frame_data(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd);
 
 #endif /* AVCODEC_APV_PARSE_H */
