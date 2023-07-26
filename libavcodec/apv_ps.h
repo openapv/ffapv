@@ -31,6 +31,11 @@
 #include "apv.h"
 #include "get_bits.h"
 
+// @see WD1_APV_spec section 7.3.3
+typedef struct APVByteAlignemnt {
+    uint8_t alignment_bit_equal_to_zero; /* equal to 0*/ // f(1)
+} APVByteAlignemnt;
+
 // The sturcture reflects Tile Header layout
 // @see WD1_APV_spec section 7.3.2.1
 //
@@ -45,7 +50,34 @@ typedef struct APVTileHeader {
     uint32_t tile_data_size_y_minus1;               // u(24)
     uint32_t tile_data_size_cb_minus1;              // u(24)
     uint32_t tile_data_size_cr_minus1;              // u(24)
+
+    APVByteAlignemnt byte_alignent;
+
 } APVTileHeader;
+
+// The sturcture reflects Tile Info sturcture layout
+// @see WD1_APV_spec 7.3.1.3 Tile info syntax
+//
+// The following descriptors specify the parsing process of each element
+// u(n) - unsigned integer using n bits
+// ue(v) - unsigned integer 0-th order Exp_Golomb-coded syntax element with the left bit first
+typedef struct APVTileInfo {
+    uint32_t tile_width_in_mbs_minus1;              // u(28)
+    uint32_t tile_height_in_mbs_minus1;             // u(28)
+    uint32_t *tile_size_minus1;                     // table of size NumTiles; elements of u(24) type
+
+    uint32_t *ColStarts; // table of size FrameWidthInMbsY
+    uint32_t *RowStarts; // table of size FrameHeightInMbsY
+    uint32_t TileCols;
+    uint32_t TileRows;
+    uint32_t NumTiles;
+
+} APVTileInfo;
+
+// @see WD1_APV_spec 7.3.1.2
+typedef struct APVQuantizationMatrix {
+    uint8_t q_matrix_minus1[3][8][8];
+} APVQuantizationMatrix;
 
 // The sturcture reflects Frame Data Header layout
 // @see WD1_APV_spec section 7.3.1.1
@@ -69,60 +101,62 @@ typedef struct APVFrameDataHeader {
     uint8_t transfer_characteristics;                // u(8)
     uint8_t matrix_coefficients;                     // u(8)
     uint8_t use_q_matrix;                            // u(1)
-    uint8_t reserved_zero_8bits_2;                   // u(8)
+
+    APVQuantizationMatrix quantization_matrix;
+    APVTileInfo tile_info;
+
+    uint8_t reserved_zero_8bits_2;                     // u(8)
+
+    APVByteAlignemnt byte_alignent;
 
 } APVFrameDataHeader;
 
-// The sturcture reflects Tile Info sturcture layout
-// @see WD1_APV_spec 7.3.1.3 Tile info syntax
-//
-// The following descriptors specify the parsing process of each element
-// u(n) - unsigned integer using n bits
-// ue(v) - unsigned integer 0-th order Exp_Golomb-coded syntax element with the left bit first
-typedef struct APVTileInfo {
-    uint32_t tile_width_in_mbs_minus1;              // u(28)
-    uint32_t tile_height_in_mbs_minus1;             // u(28)
-    uint32_t *tile_size_minus1;                     // u(24)
+typedef struct APVTileData {
+    uint32_t PrevDc;
+    uint32_t PrevDcDiff;
+    uint32_t numMbColsInTile;
+    uint32_t numMbRowsInTile;
+    uint32_t numMbsInTile;
+    uint32_t Prev1stAcLevel;
 
-    uint32_t *ColStarts; // table of size FrameWidthInMbsY
-    uint32_t *RowStarts; // table of size FrameHeightInMbsY
-    uint32_t TileCols;
-    uint32_t TileRows;
+    APVByteAlignemnt byte_alignent;
+} APVTileData;
 
-} APVTileInfo;
+typedef struct APVTile { // @todo change to AVPFrameData
+    APVTileHeader tile_header;
+    APVTileData tile_data[3];
+} APVTile;
+
+typedef struct APVFrameData { // @todo change to AVPFrameData
+    APVFrameDataHeader frame_data_header;
+    APVTile **tiles; // table of pointers to elements of type APVTile; the size of table is NumTiles
+    uint32_t NumTiles;
+} APVFrameData;
 
 typedef struct APVParamSets { // @todo change to AVPFrameData
-    APVFrameDataHeader frame_data_header;
-    uint8_t q_matrix_minus1[3][8][8];
-    APVTileInfo tile_info;
-    uint8_t alignment_bit_equal_to_zero; /* equal to 0*/
-
-    APVTileHeader tile_header;
-
-    uint32_t NumTiles;
-
+    APVFrameData frame_data;
 } APVParamSets;
 
 // @see WD1_APV_spec section 7.3.1.3 Tile info syntax
-int ff_apv_tile_info(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileInfo *ti);
 
 // @see WD1_APV_spec section 7.3.3 Byte alignment syntax
-int ff_apv_byte_alignment(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_byte_alignment(GetBitContext *gb, APVByteAlignemnt *ba);
 
 // @see WD1_APV_spec section 7.3.1.2 Quantization matrix syntax
-int ff_apv_quantization_matrix(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_quantization_matrix(GetBitContext *gb, APVQuantizationMatrix *qm);
 
 // @see WD1_APV_spec section 7.3.1.1
-int ff_apv_parse_frame_header(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *fdh);
 
 // @see WD1_APV_spec section 7.3.2
-int ff_apv_parse_tile(GetBitContext *gb, APVParamSets *ps, uint8_t tileIdx);
+int ff_apv_parse_tile(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *tile, uint8_t tileIdx);
 
 // @see WD1_APV_spec 7.3.1.4 Metadata syntax
-int ff_apv_parse_metadata(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_parse_metadata(GetBitContext *gb, APVFrameData *fd);
 
 // @see WD1_APV_spec 7.3.1.5 Filler data syntax
-int ff_apv_parse_filler_data(GetBitContext *gb, APVParamSets *ps);
+int ff_apv_parse_filler_data(GetBitContext *gb, APVFrameData *fd);
 
 void ff_apv_ps_free(APVParamSets *ps);
 

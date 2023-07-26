@@ -23,14 +23,19 @@
 #include "apv.h"
 #include "apv_parse.h"
 
-int ff_apv_parse_frame_data(GetBitContext *gb, APVParamSets *ps) {
-    ff_apv_parse_frame_header(gb, ps);
+int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd)
+{
+    ff_apv_parse_frame_header(gb, &fd->frame_data_header);
 
-    for( int i = 0; i < ps->NumTiles; i++ ) {
-        ff_apv_parse_tile( gb, ps, i );
+    fd->tiles = (APVTile **)malloc(fd->NumTiles * sizeof(APVTile *));
+
+    for( int i = 0; i < fd->NumTiles; i++ ) {
+        fd->tiles[i] = (APVTile *)malloc(sizeof(APVTile));
+
+        ff_apv_parse_tile( gb, &fd->frame_data_header,  fd->tiles[i], i );
     }
-    ff_apv_parse_metadata(gb, ps);
-    ff_apv_parse_filler_data(gb, ps);
-    
+    ff_apv_parse_metadata(gb, fd);
+    ff_apv_parse_filler_data(gb, fd);
+
     return 0;
 }
