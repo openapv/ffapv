@@ -41,6 +41,13 @@
 #include "decode.h"
 #include "apv.h"
 
+/* assert function */
+#include <assert.h>
+#define assert_r(x) {if(!(x)){assert(x); return;}}
+#define assert_rv(x,r) {if(!(x)){assert(x); return (r);}}
+#define assert_g(x,g) {if(!(x)){assert(x); goto g;}}
+#define assert_gv(x,r,v,g) {if(!(x)){assert(x); (r)=(v); goto g;}}
+
 #define APV_ALIGN_VAL(val, align) ((((val)+(align)-1)/(align))*(align))
 
 /**
@@ -86,9 +93,33 @@ static void get_conf(AVCodecContext *avctx, apvd_cdsc_t *cdsc)
  */
 static int export_stream_params(const apvd_info_t* info, AVCodecContext *avctx)
 {
-    avctx->pix_fmt = info->cs;
     avctx->width = info->w;
     avctx->height = info->h;
+
+    switch(info->cs) {
+    case APV_CS_YCBCR422_10LE:
+        avctx->pix_fmt = AV_PIX_FMT_YUV422P10;
+        break;
+    case APV_CS_YCBCR444_10LE:
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P10;
+        break;
+    case APV_CS_SET(APV_CF_YCBCR422, 12, 0):
+        avctx->pix_fmt = AV_PIX_FMT_YUV422P10LE;
+        break;
+    case APV_CS_SET(APV_CF_YCBCR444, 12, 0):
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P10LE;
+        break;
+    case APV_CS_SET(APV_CF_YCBCR422, 12, 1):
+        avctx->pix_fmt = AV_PIX_FMT_YUV422P12BE;
+        break;
+    case APV_CS_SET(APV_CF_YCBCR444, 12, 1):
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P12BE;
+        break;
+    default:
+        av_log(avctx, AV_LOG_ERROR, "Unknown color space\n");
+        avctx->pix_fmt = AV_PIX_FMT_NONE;
+        return AVERROR_INVALIDDATA;
+    }
 
     return 0;
 }
@@ -124,6 +155,72 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, apv_imgb_t *imgb, st
                   imgb->w[0], imgb->h[0]);
 
     return 0;
+}
+
+/* Function for atomic increament:
+   This function might need to modify according to O/S or CPU platform
+*/
+static int atomic_inc(volatile int* pcnt)
+{
+    int ret;
+    ret = *pcnt;
+    ret++;
+    *pcnt = ret;
+    return ret;
+}
+
+/* Function for atomic decrement:
+   This function might need to modify according to O/S or CPU platform
+*/
+static int atomic_dec(volatile int* pcnt)
+{
+    int ret;
+    ret = *pcnt;
+    ret--;
+    *pcnt = ret;
+    return ret;
+}
+
+/* Function to allocate memory for picture buffer:
+   This function might need to modify according to O/S or CPU platform
+*/
+static void * picbuf_alloc(int size)
+{
+    return malloc(size);
+}
+
+/* Function to free memory allocated for picture buffer:
+   This function might need to modify according to O/S or CPU platform
+*/
+static void picbuf_free(void* p)
+{
+    if (p) {free(p);}
+}
+
+static int imgb_addref(apv_imgb_t * imgb)
+{
+    assert_rv(imgb, APV_ERR_INVALID_ARGUMENT);
+    return atomic_inc(&imgb->refcnt);
+}
+
+static int imgb_getref(apv_imgb_t * imgb)
+{
+    assert_rv(imgb, APV_ERR_INVALID_ARGUMENT);
+    return imgb->refcnt;
+}
+
+static int imgb_release(apv_imgb_t * imgb)
+{
+    int refcnt, i;
+    assert_rv(imgb, APV_ERR_INVALID_ARGUMENT);
+    refcnt = atomic_dec(&imgb->refcnt);
+    if(refcnt == 0) {
+        for(i=0; i<APV_IMGB_MAX_PLANE; i++) {
+            if (imgb->baddr[i]) picbuf_free(imgb->baddr[i]);
+        }
+        free(imgb);
+    }
+    return refcnt;
 }
 
 /**
@@ -182,12 +279,15 @@ static apv_imgb_t * imgb_create(int w, int h, int cs, struct AVCodecContext *avc
         imgb->e[i] = imgb->ah[i];
 
         imgb->bsize[i] = imgb->s[i] * imgb->e[i];
-        imgb->a[i] = imgb->baddr[i] = malloc(imgb->bsize[i]);
+        imgb->a[i] = imgb->baddr[i] = picbuf_alloc(imgb->bsize[i]);
         if(imgb->a[i] == NULL) goto ERR;
 
         memset(imgb->a[i], 0, imgb->bsize[i]);
     }
     imgb->cs = cs;
+    imgb->addref = imgb_addref;
+    imgb->getref = imgb_getref;
+    imgb->release = imgb_release;
 
     imgb->addref(imgb); /* increase reference count */
     return imgb;
@@ -365,8 +465,12 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                     return ret;
                 }
 
-                frame->pkt_dts = imgb->ts[0];
-                frame->pts = imgb->ts[0];
+                // @todo Check why the following code causes a problem with APV stream playback
+                // If frame->pkt_dts and frame->pts are set to a value other than AV_NOPTS_VALUE, the stream does not play properly.
+                // Only one frame is displayed.
+                //
+                frame->pkt_dts = AV_NOPTS_VALUE;
+                frame->pts = AV_NOPTS_VALUE;
 
                 // apvd_t_pull uses pool of objects of type apv_imgb.
                 // The pool size is equal MAX_PB_SIZE (26), so release object when it is no more needed
