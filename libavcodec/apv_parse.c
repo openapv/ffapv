@@ -25,17 +25,29 @@
 
 int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd)
 {
+    int num_tiles = 0;
     ff_apv_parse_frame_header(gb, &fd->frame_data_header);
 
-    fd->tiles = (APVTile **)malloc(fd->NumTiles * sizeof(APVTile *));
 
-    for( int i = 0; i < fd->NumTiles; i++ ) {
-        fd->tiles[i] = (APVTile *)malloc(sizeof(APVTile));
+    num_tiles = fd->frame_data_header.tile_info.NumTiles;
 
-        ff_apv_parse_tile( gb, &fd->frame_data_header,  fd->tiles[i], i );
+    fd->tiles = (APVTile **)malloc(num_tiles * sizeof(APVTile *));
+
+    for( int i = 0; i < num_tiles; i++ ) {
+        fd->tiles[i] = NULL;
     }
-    ff_apv_parse_metadata(gb, fd);
-    ff_apv_parse_filler_data(gb, fd);
+    // @todo Check if it is needed here at all
+    // The following commented out code causes a segfault.
+    // Check if it is needed here at all. Decoding is delegated to the library, so maybe the code snippet below doesn't make sense at all.
+    // Everything was implemented according to the documentation, but not everything has to be right here.
+    //
+    // for( int i = 0; i < num_tiles; i++ ) {
+    //     fd->tiles[i] = (APVTile *)malloc(sizeof(APVTile));
+
+    //     ff_apv_parse_tile( gb, &fd->frame_data_header,  fd->tiles[i], i );
+    // }
+    // ff_apv_parse_metadata(gb, fd);
+    // ff_apv_parse_filler_data(gb, fd);
 
     return 0;
 }

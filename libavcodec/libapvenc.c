@@ -34,6 +34,7 @@
 #include "libavutil/time.h"
 #include "libavutil/cpu.h"
 #include "libavutil/avstring.h"
+#include "libavutil/mem.h"
 
 #include "avcodec.h"
 #include "internal.h"
@@ -280,7 +281,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-    // @todo provide apve_param_check implementation
+    // @todo provide apve_param_check implementationAV_PIX_FMT_YUV422P10
     //
     // if ((ret = apve_param_check(&cdsc->param)) != 0) {
     //     av_log(avctx, AV_LOG_ERROR, "Invalid configuration\n");
