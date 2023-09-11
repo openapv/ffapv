@@ -111,7 +111,7 @@ static int apv_parse(AVCodecParserContext *s, AVCodecContext *avctx,
     APVParserContext *ctx = s->priv_data;
 
     s->picture_structure = AV_PICTURE_STRUCTURE_FRAME;
-    s->key_frame = 0;
+    s->key_frame = 1;
 
     if (avctx->extradata && !ctx->parsed_extradata) {
         decode_extradata(s, avctx);
