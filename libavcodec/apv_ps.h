@@ -31,6 +31,13 @@
 #include "apv.h"
 #include "get_bits.h"
 
+/* size of block */
+#define APV_LOG2_BLOCK                  (3)
+#define APV_BLOCK                       (1<<APV_LOG2_BLOCK)
+#define APV_BLOCK_W                     (1<<APV_LOG2_BLOCK)
+#define APV_BLOCK_H                     (1<<APV_LOG2_BLOCK)
+#define APV_BLOCK_D                     (APV_BLOCK_W * APV_BLOCK_H)
+
 // @see WD1_APV_spec section 7.3.3
 typedef struct APVByteAlignemnt {
     uint8_t alignment_bit_equal_to_zero; /* equal to 0*/ // f(1)
@@ -130,7 +137,6 @@ typedef struct APVTile { // @todo change to AVPFrameData
 typedef struct APVFrameData { // @todo change to AVPFrameData
     APVFrameDataHeader frame_data_header;
     APVTile **tiles; // table of pointers to elements of type APVTile; the size of table is NumTiles
-    uint32_t NumTiles;
 } APVFrameData;
 
 typedef struct APVParamSets { // @todo change to AVPFrameData
