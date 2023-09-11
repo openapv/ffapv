@@ -165,7 +165,12 @@ int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *fdh)
     fdh->reserved_zero_8bits = get_bits(gb, 8);
     fdh->frame_width_minus1 = get_bits(gb, 32);
     fdh->frame_height_minus1 = get_bits(gb, 32);
-    fdh->chroma_format_idc = get_bits(gb, 2);
+
+    // @todo documentation inconsistency with the reference implementation.
+    //
+    // The reference application uses 4 bits for chroma_format_idc
+    // while the documentation says that chroma_format_idc takes up 2 bits in the header
+    fdh->chroma_format_idc = get_bits(gb, 4);
     fdh->bit_depth_minus8 = get_bits(gb, 4);
     fdh->capture_time_distance = get_bits(gb, 8);
     fdh->reserved_zero_16bits = get_bits(gb, 16);
@@ -373,12 +378,13 @@ int ff_apv_parse_tile(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile 
 
 void ff_apv_ps_free(APVParamSets *ps)
 {
-    APVFrameData fd = ps->frame_data;
+    APVFrameData* fd = &ps->frame_data;
+    int num_tiles = fd->frame_data_header.tile_info.NumTiles;
 
-    for( int i = 0; i < fd.NumTiles; i++ )
-        free(fd.tiles[i]);
+    for( int i = 0; i < num_tiles; i++ )
+        free(fd->tiles[i]);
 
-    free(fd.tiles);
+    free(fd->tiles);
 }
 
 // @see WD1_APV_spec Annex C C.1.1 Metadata synatx
