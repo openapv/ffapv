@@ -45,7 +45,6 @@ static int apvc_parse_frame_header(const uint8_t *bs, int bs_size, APVDecoderCon
 {
     GetBitContext gb;
 
-    uint16_t frame_header_size;
     uint8_t reserved_zero_8bits;
     uint32_t frame_width_minus1;
     uint32_t frame_height_minus1;
@@ -55,7 +54,8 @@ static int apvc_parse_frame_header(const uint8_t *bs, int bs_size, APVDecoderCon
     if (ret < 0)
         return ret;
 
-    frame_header_size = get_bits(&gb, 16);
+    // skip frame_header_size bits 
+    skip_bits_long(&gb, 16);
 
     apvc->profile_idc = get_bits(&gb, 8); // @todo check value range AnnexA
     apvc->level_idc = get_bits(&gb, 8);   // @todo check value range AnnexA
