@@ -208,6 +208,11 @@ const AVCodecTag ff_nut_video_tags[] = {
     { AV_CODEC_ID_RAWVIDEO, MKTAG(0xBA, 'G', 'R', 16  ) },
     { AV_CODEC_ID_RAWVIDEO, MKTAG(16,   'R', 'G', 0xBA) },
 
+    // @todo Change tag for APV format 
+    // The tag value for APV format is temporary.
+    // It will be changed when the appropriate value appears in the standard describing the APV format.
+    { AV_CODEC_ID_APV,             MKTAG('a', 'p', 'v', '1') }, 
+
     { AV_CODEC_ID_NONE,             0 }
 };
 
