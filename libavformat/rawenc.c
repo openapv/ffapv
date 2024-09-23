@@ -124,7 +124,6 @@ const FFOutputFormat ff_apv_muxer = {
     .p.extensions      = "apv",
     .p.audio_codec     = AV_CODEC_ID_NONE,
     .p.video_codec     = AV_CODEC_ID_APV,
-    .init              = force_one_stream,
     .write_packet      = ff_raw_write_packet,
     .p.flags           = AVFMT_NOTIMESTAMPS,
 };
