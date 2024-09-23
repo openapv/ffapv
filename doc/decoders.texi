@@ -397,6 +397,39 @@ without this library.
 @chapter Subtitles Decoders
 @c man begin SUBTILES DECODERS
 
+@section libapv
+
+Advanced Professional Video codec decoder wrapper.
+
+This decoder requires the presence of the libapv headers and library
+during configuration. You need to explicitly configure the build with
+@option{--enable-libapv}.
+
+@float NOTE
+Many libapv decoder options are mapped to FFmpeg global codec options,
+while unique decoder options are provided through private options.
+Additionally the apv-params private options allows one to pass a list
+of key=value tuples as accepted by the libapv @code{parse_apv_params} function.
+@end float
+
+The apv project website is at @url{https://github.com/openapv/openapv}.
+
+@subsection Options
+
+The following options are supported by the libapv wrapper.
+The apv-equivalent options or values are listed in parentheses for easy migration.
+
+@float NOTE
+To get a more accurate and extensive documentation of the libapv options,
+invoke the command  @code{apv_app_dec --help} or consult the libxevd documentation.
+@end float
+
+@table @option
+@item threads (@emph{threads})
+Force to use a specific number of threads
+
+@end table
+
 @section libaribb24
 
 ARIB STD-B24 caption decoder.
