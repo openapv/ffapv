@@ -214,6 +214,7 @@ External library support:
   --enable-ladspa          enable LADSPA audio filtering [no]
   --enable-lcms2           enable ICC profile support via LittleCMS 2 [no]
   --enable-libaom          enable AV1 video encoding/decoding via libaom [no]
+  --enable-libapv          enable APV encoding via libapv [no]
   --enable-libaribb24      enable ARIB text and caption decoding via libaribb24 [no]
   --enable-libaribcaption  enable ARIB text and caption decoding via libaribcaption [no]
   --enable-libass          enable libass subtitles rendering,
@@ -1911,6 +1912,7 @@ EXTERNAL_LIBRARY_LIST="
     ladspa
     lcms2
     libaom
+    libapv
     libaribcaption
     libass
     libbluray
@@ -3544,6 +3546,7 @@ prores_videotoolbox_encoder_select="videotoolbox_encoder"
 libaom_av1_decoder_deps="libaom"
 libaom_av1_encoder_deps="libaom"
 libaom_av1_encoder_select="extract_extradata_bsf dovi_rpuenc"
+libapv_encoder_deps="libapv"
 libaribb24_decoder_deps="libaribb24"
 libaribcaption_decoder_deps="libaribcaption"
 libcelt_decoder_deps="libcelt"
@@ -6900,6 +6903,7 @@ enabled jni               && { [ $target_os = "android" ] && check_headers jni.h
 enabled ladspa            && require_headers "ladspa.h dlfcn.h"
 enabled lcms2             && require_pkg_config lcms2 "lcms2 >= 2.13" lcms2.h cmsCreateContext
 enabled libaom            && require_pkg_config libaom "aom >= 2.0.0" aom/aom_codec.h aom_codec_version
+enabled libapv            && require_pkg_config libapv "apv >= 0.1.0" "apv/apv.h" apve_encode
 enabled libaribb24        && { check_pkg_config libaribb24 "aribb24 > 1.0.3" "aribb24/aribb24.h" arib_instance_new ||
                                { enabled gpl && require_pkg_config libaribb24 aribb24 "aribb24/aribb24.h" arib_instance_new; } ||
                                die "ERROR: libaribb24 requires version higher than 1.0.3 or --enable-gpl."; }
