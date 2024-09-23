@@ -35,6 +35,14 @@ package(amdgru-pro contains, but does not install automatically) are required.
 
 This driver can be installed using amdgpu-pro-install script in official amd driver archive.
 
+@section Advanced Professional Video codec (APV)
+
+FFmpeg can make use of the APV library for APV video encoding.
+
+Go to @url{https://github.com/openapv/openapv} and follow the instructions for
+installing the APV library. Then pass @code{--enable-libapv} to configure to
+enable it.
+
 @section AviSynth
 
 FFmpeg can read AviSynth scripts as input. To enable support, pass
@@ -628,6 +636,7 @@ library:
 @item raw APV                   @tab X @tab X
 @item raw aptX                  @tab X @tab X
 @item raw aptX HD               @tab X @tab X
+@item raw apv                   @tab X @tab X
 @item raw Bonk                  @tab   @tab X
 @item raw Chinese AVS video     @tab X @tab X
 @item raw DFPWM                 @tab X @tab X
