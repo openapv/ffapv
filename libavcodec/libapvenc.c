@@ -47,7 +47,7 @@
 /**
  * The structure stores all the states associated with the instance of APV encoder
  */
-typedef struct ApvContext {
+typedef struct ApvEncContext {
     const AVClass *class;
 
     apve_t id;            // APV instance identifier
@@ -93,7 +93,7 @@ typedef struct ApvContext {
     char q_matrix_v[512];
 
     AVDictionary *apve_params;
-} ApvContext;
+} ApvEncContext;
 
 /**
  * Convert FFmpeg pixel format (AVPixelFormat) into APV pre-defined color space
@@ -153,7 +153,7 @@ static int libapve_apv_color_space(enum AVPixelFormat av_pix_fmt)
  */
 static int get_conf(AVCodecContext *avctx, apve_cdsc_t *cdsc)
 {
-    ApvContext *apvctx = NULL;
+    ApvEncContext *apvctx = NULL;
     int ret;
 
     apvctx = avctx->priv_data;
@@ -227,7 +227,7 @@ static int get_conf(AVCodecContext *avctx, apve_cdsc_t *cdsc)
  *
  * @return 0 on success, negative error code on failure
  */
-static int set_extra_config(AVCodecContext *avctx, apvd_t id, ApvContext *ctx)
+static int set_extra_config(AVCodecContext *avctx, apvd_t id, ApvEncContext *ctx)
 {
     int ret, size, value;
 
@@ -253,7 +253,7 @@ static int set_extra_config(AVCodecContext *avctx, apvd_t id, ApvContext *ctx)
  */
 static av_cold int libapve_init(AVCodecContext *avctx)
 {
-    ApvContext *apvctx = avctx->priv_data;
+    ApvEncContext *apvctx = avctx->priv_data;
     unsigned char *bs_buf = NULL;
     int i;
     int shift_h = 0;
@@ -357,7 +357,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
                           const AVFrame *frame, int *got_packet)
 {
-    ApvContext *apvctx =  avctx->priv_data;
+    ApvEncContext *apvctx =  avctx->priv_data;
     int  ret = -1;
     int i;
 
@@ -414,7 +414,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
  */
 static av_cold int libapve_close(AVCodecContext *avctx)
 {
-    ApvContext *apvctx = avctx->priv_data;
+    ApvEncContext *apvctx = avctx->priv_data;
     (void)apvctx;
 
     if (apvctx->id) {
@@ -428,7 +428,7 @@ static av_cold int libapve_close(AVCodecContext *avctx)
     return 0;
 }
 
-#define OFFSET(x) offsetof(ApvContext, x)
+#define OFFSET(x) offsetof(ApvEncContext, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 
 static const enum AVPixelFormat supported_pixel_formats[] = {
@@ -497,7 +497,7 @@ const FFCodec ff_libapv_encoder = {
     .init               = libapve_init,
     FF_CODEC_ENCODE_CB(libapve_encode),
     .close              = libapve_close,
-    .priv_data_size     = sizeof(ApvContext),
+    .priv_data_size     = sizeof(ApvEncContext),
     .p.priv_class       = &libapve_class,
     .defaults           = libapve_defaults,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_DR1,
