@@ -766,6 +766,7 @@ extern const FFCodec ff_qdmc_at_decoder;
 extern const FFCodec ff_qdm2_at_decoder;
 extern FFCodec ff_libaom_av1_encoder;
 extern const FFCodec ff_libapv_encoder;
+extern const FFCodec ff_libapv_decoder;
 
 /* preferred over libaribb24 */
 extern const FFCodec ff_libaribcaption_decoder;
