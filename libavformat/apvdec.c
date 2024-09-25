@@ -268,5 +268,11 @@ const AVInputFormat ff_apv_demuxer = {
     .flags_internal = FF_FMT_INIT_CLEANUP,
     .raw_codec_id   = AV_CODEC_ID_APV,
     .priv_data_size = sizeof(APVDemuxContext),
+
+    // @todo Change tag for APV format 
+    // The tag value for APV format is temporary.
+    // It will be changed when the appropriate value appears in the standard describing the APV format.
+    .codec_tag = MKTAG('a','p','v','1'), 
+    
     .priv_class     = &apv_demuxer_class,
 };
