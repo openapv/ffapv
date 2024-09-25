@@ -394,9 +394,8 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
         avpkt->time_base.num = 1;
         avpkt->time_base.den = apvctx->cdsc.param.fps;
-
-        avpkt->pts = avpkt->dts = apvctx->bitb.ts[0];
-
+        
+        avpkt->pts = avpkt->dts = frame->pts + 1;  // @todo provide implementation in APV apvctx->bitb.ts[0];
         ff_side_data_set_encoder_stats(avpkt, apvctx->stat.qp * FF_QP2LAMBDA, NULL, 0, AV_PICTURE_TYPE_I);
 
         *got_packet = 1;
