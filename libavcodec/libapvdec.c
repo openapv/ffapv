@@ -472,6 +472,11 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 frame->pkt_dts = AV_NOPTS_VALUE;
                 frame->pts = AV_NOPTS_VALUE;
 
+                if (pkt_fd->flags & AV_PKT_FLAG_KEY) {
+                    frame->pict_type = AV_PICTURE_TYPE_I;
+                    frame->flags |= AV_FRAME_FLAG_KEY;
+                }
+                
                 // apvd_t_pull uses pool of objects of type apv_imgb.
                 // The pool size is equal MAX_PB_SIZE (26), so release object when it is no more needed
                 imgb->release(imgb);
