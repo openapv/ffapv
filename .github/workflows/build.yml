@@ -1,0 +1,46 @@
+name: Build FFmpeg with OpenAPV
+
+on:
+  workflow_dispatch:  # This allows manual triggering of the workflow
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            build-essential \
+            cmake \
+            pkg-config \
+            nasm 
+
+      - name: Download and build external OpenAPV dependency
+        run: |
+          git clone https://github.com/openapv/openapv.git
+          cd openapv
+          cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
+          cmake --build build
+          cpack
+          sudo dpkg -i *.deb  # Install the generated .deb package
+
+      - name: Build FFmpeg
+        run: |
+          ./configure --enable-apv
+          make
+          make install
+
+      - name: Verify FFmpeg installation
+        run: |
+          ffmpeg -version
+
+      - name: Run FATE tests
+        run: |
+          make fate
