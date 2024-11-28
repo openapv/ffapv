@@ -25,7 +25,17 @@
 
 // The length field that indicates the length in bytes of the following Frame Data is configured to be of 4 bytes
 // A four-byte length Frame Data Size syntax element, which indicates the size of the Frame Data in bytes, may precede the Frame Data, depending on the application.
+#define APV_AU_SIZE_PREFIX_LENGTH           (4)  /* byte */
+#define APV_PBU_SIZE_PREFIX_LENGTH          (4)  /* byte */
+
+// @deprecated
 #define APV_FRAME_DATA_SIZE_PREFIX_LENGTH   (4)  /* byte */
+
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.3
+#define APV_PBU_HEADER_SIZE                 (4)  /* byte */
+
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.6
+#define APV_FRAME_INFO_SIZE                 (14)  /* byte */
 
 /* size of macroblock */
 #define APV_LOG2_MB                     (4)

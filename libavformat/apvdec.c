@@ -40,6 +40,10 @@
 
 typedef struct APVParserContext {
     int got_frame_data;
+    APVPBUHeader pbu_header;
+    APVFrameInfo frame_info;
+
+    // deprecated
     APVFrameDataHeader frame_data_header;
 } APVParserContext;
 
@@ -69,6 +73,8 @@ static const AVClass apv_demuxer_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
+#if 0
+// @deprecated
 static int apv_parse_frame_data_header(GetBitContext *gb, APVFrameDataHeader *fdh)
 {
     fdh->frame_header_size              = get_bits(gb, 16);
@@ -103,7 +109,35 @@ static int apv_parse_frame_data_header(GetBitContext *gb, APVFrameDataHeader *fd
 
     return 0;
 }
+#endif
 
+#if 0
+static int apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *finfo)
+{
+    finfo->profile_idc                    = get_bits(gb, 8);
+    finfo->level_idc                      = get_bits(gb, 8);
+    finfo->band_idc                       = get_bits(gb, 3);
+    finfo->reserved_zero_5bits            = get_bits(gb, 5);
+    finfo->frame_width_minus1             = get_bits(gb, 32);
+    finfo->frame_height_minus1            = get_bits(gb, 32);
+    finfo->chroma_format_idc              = get_bits(gb, 4);
+    finfo->bit_depth_minus8               = get_bits(gb, 4);
+    finfo->capture_time_distance          = get_bits(gb, 8);
+    finfo->reserved_zero_8bits            = get_bits(gb, 8);
+    
+    return 0;
+}
+#endif
+
+// static int apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
+// {
+//     pbuh->pbu_type                      = get_bits(gb, 8);
+//     pbuh->group_id                      = get_bits(gb, 16);
+//     pbuh->reserved_zer_8bits            = get_bits(gb, 8);
+        
+//     return 0;
+// }
+#if 0
 static int apv_annexb_probe(const AVProbeData *p)
 {
     APVParserContext ev = {0};
@@ -145,7 +179,137 @@ static int apv_annexb_probe(const AVProbeData *p)
 
     return 0;
 }
+#endif
 
+// The implementation of the probe function is in accordance with the documentation provided in draft-lim-apv-02 version 02. 
+// https://datatracker.ietf.org/doc/html/draft-lim-apv-02
+static int apv_annexb_probe2(const AVProbeData *p)
+{
+    APVParserContext ev = {0};
+
+    // size_t frame_data_header_size;
+    GetBitContext gb;
+
+    unsigned char *bs = (unsigned char *)p->buf;
+    int bs_size = p->buf_size;
+    int ret = 0;
+
+    if (bs_size < APV_PBU_SIZE_PREFIX_LENGTH + APV_AU_SIZE_PREFIX_LENGTH + APV_PBU_HEADER_SIZE)
+        return 0;
+
+    ret = init_get_bits8(&gb, bs, bs_size);
+    if (ret < 0)
+        return 0;
+
+    // skip a four-byte length Access Unit Size syntax element, which indicates the size of the AU in bytes
+    skip_bits_long(&gb, 32);
+
+    // skip a four-byte length PBU Size syntax element, which indicates the size of the PBU in bytes
+    skip_bits_long(&gb, 32);
+
+    // read frame data header size in bytes
+    // frame_data_header_size  = show_bits(&gb, 16);
+
+    // if(bs_size < APV_FRAME_DATA_SIZE_PREFIX_LENGTH + frame_data_header_size)
+    //     return 0;
+
+    //apv_parse_frame_data_header(&gb, &ev.frame_data_header);
+    ff_apv_parse_pbu_header(&gb, &ev.pbu_header);
+    
+    // if((1 <= ev.pbu_header.pbu_type && ev.pbu_header.pbu_type <=2) ||
+    //    (25 <= ev.pbu_header.pbu_type && ev.pbu_header.pbu_type <= 27) && ev.pbu_header.reserved_zer_8bits == 0) {
+    //     return AVPROBE_SCORE_EXTENSION + 1;  // 1 more than .mpg
+    // }
+    
+    if( ev.pbu_header.pbu_type == 1  ||
+        ev.pbu_header.pbu_type == 2  ||
+        ev.pbu_header.pbu_type == 25 ||
+        ev.pbu_header.pbu_type == 26 ||
+        ev.pbu_header.pbu_type == 27 ) {
+
+        ff_apv_parse_frame_info(&gb, &ev.frame_info);
+    
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.1
+        // Conformance of a coded frame to the 422-10 profile is indicated by profile_idc equal to 33
+        if(ev.frame_info.profile_idc == 33 && 
+            ev.frame_info.chroma_format_idc == 2 &&  
+            ev.frame_info.bit_depth_minus8 == 2 && 
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.2
+        // Conformance of a coded frame to the 422-12 profile is indicated by profile_idc equal to 44
+        else if(ev.frame_info.profile_idc == 44 && 
+            ev.frame_info.chroma_format_idc == 2 &&  
+            ev.frame_info.bit_depth_minus8 >= 2 && ev.frame_info.bit_depth_minus8 <= 4 && 
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.3
+        // Conformance of a coded frame to the 444-10 profile is indicated by profile_idc equal to 55
+        else if(ev.frame_info.profile_idc == 55 && 
+            ev.frame_info.chroma_format_idc >= 2 && ev.frame_info.chroma_format_idc <= 3  &&  
+            ev.frame_info.bit_depth_minus8 == 2 && 
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.4
+        // Conformance of a coded frame to the 444-12 profile is indicated by profile_idc equal to 66
+        else if(ev.frame_info.profile_idc == 66 && 
+            ev.frame_info.chroma_format_idc >= 2 && ev.frame_info.chroma_format_idc <= 3  &&  
+            ev.frame_info.bit_depth_minus8 >= 2 && ev.frame_info.bit_depth_minus8 <= 4 && 
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.5
+        // Conformance of a coded frame to the 4444-10 profile is indicated by profile_idc equal to 77
+        else if(ev.frame_info.profile_idc == 77 && 
+            ev.frame_info.chroma_format_idc >= 2 && ev.frame_info.chroma_format_idc <= 4  &&  
+            ev.frame_info.bit_depth_minus8 == 2  && 
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.6
+        // Conformance of a coded frame to the 4444-12 profile is indicated by profile_idc equal to 88
+        else if(ev.frame_info.profile_idc == 88 && 
+            ev.frame_info.chroma_format_idc >= 2 && ev.frame_info.chroma_format_idc <= 4  &&  
+            ev.frame_info.bit_depth_minus8 >= 2 && ev.frame_info.bit_depth_minus8 <= 4 &&
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+        // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.7
+        // Conformance of a coded frame to the 400-10 profile is indicated by profile_idc equal to 99
+        else if(ev.frame_info.profile_idc == 99 && 
+            ev.frame_info.chroma_format_idc == 0  &&  
+            ev.frame_info.bit_depth_minus8 == 2 &&
+            ev.pbu_header.pbu_type == 1 )
+        {
+            ev.got_frame_data = 1;
+        }
+    }
+    
+    // if( ev.frame_data_header.profile_idc == 33 && // @see Annex A - A.3.2 Profiles (Baseline profile)
+    //     ev.frame_data_header.chroma_format_idc == 2 &&
+    //     ev.frame_data_header.bit_depth_minus8 >= 2 && ev.frame_data_header.bit_depth_minus8 <= 4 &&
+    //     ev.frame_data_header.reserved_zero_16bits == 0 )
+    //     ev.got_frame_data = 1;
+
+    if (ev.got_frame_data && 
+        ev.pbu_header.reserved_zer_8bits == 0 && 
+        ev.frame_info.reserved_zero_5bits == 0 &&
+        ev.frame_info.reserved_zero_8bits == 0 ) {
+        return AVPROBE_SCORE_EXTENSION + 1;  // 1 more than .mpg
+    }
+
+    return 0;
+}
+#if 0
 static int apv_read_header(AVFormatContext *s)
 {
     AVStream *st;
@@ -206,6 +370,183 @@ static int apv_read_header(AVFormatContext *s)
 
     return 0;
 }
+#endif
+static int apv_read_header2(AVFormatContext *s)
+{
+    AVStream *st;
+    FFStream *sti;
+
+    APVDemuxContext *c = s->priv_data;
+    APVFrameInfo frame_info;
+    APVPBUHeader pbu_header;
+
+    GetBitContext gb;
+    int ret;
+    uint32_t to_read = 0;
+
+    int eof = avio_feof (s->pb);
+    if(eof) {
+        return AVERROR_EOF;
+    }
+
+    st = avformat_new_stream(s, NULL);
+    if (!st)
+        return AVERROR(ENOMEM);
+
+    sti = ffstream(st);
+
+    ret = init_get_bits8(&gb, s->pb->buffer, s->pb->buffer_size);
+    if (ret < 0)
+        return 0;
+
+    to_read += APV_AU_SIZE_PREFIX_LENGTH;
+    to_read += APV_PBU_SIZE_PREFIX_LENGTH;
+    to_read += APV_PBU_HEADER_SIZE;
+    to_read += APV_FRAME_INFO_SIZE;
+
+    if(s->pb->buffer_size < to_read)
+        return 0; 
+    
+    skip_bits_long(&gb, 32); // AU size
+    skip_bits_long(&gb, 32); // PBU size
+
+    ff_apv_parse_pbu_header(&gb, &pbu_header);
+
+    if((1  <= pbu_header.pbu_type && pbu_header.pbu_type <=2) ||
+       (25 <= pbu_header.pbu_type && pbu_header.pbu_type <= 27))    {
+        ff_apv_parse_frame_info(&gb,  &frame_info);
+    } else if(pbu_header.pbu_type == 65) {
+        ff_apv_parse_frame_info(&gb, &frame_info);
+    } else {
+        return 0;
+    }
+
+    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    st->codecpar->codec_id = AV_CODEC_ID_APV;
+    st->codecpar->width = frame_info.frame_width_minus1+1;
+    st->codecpar->height = frame_info.frame_height_minus1+1;
+
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.1
+    // Conformance of a coded frame to the 422-10 profile is indicated by profile_idc equal to 33
+    if(frame_info.profile_idc == 33 && 
+       frame_info.chroma_format_idc == 2 &&  
+       frame_info.bit_depth_minus8 == 2 && 
+       pbu_header.pbu_type == 1 ) 
+    {
+        st->codecpar->format = AV_PIX_FMT_YUV422P10;
+    } 
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.2
+    // Conformance of a coded frame to the 422-12 profile is indicated by profile_idc equal to 44
+    else if(frame_info.profile_idc == 44 && 
+            frame_info.chroma_format_idc == 2 &&  
+            frame_info.bit_depth_minus8 >= 2 && frame_info.bit_depth_minus8 <= 4 && 
+            pbu_header.pbu_type == 1 )
+    {
+        if(frame_info.bit_depth_minus8 == 2) {
+            st->codecpar->format = AV_PIX_FMT_YUV422P10;
+        } else {
+            st->codecpar->format = AV_PIX_FMT_YUV422P12;
+        }
+    }
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.3
+    // Conformance of a coded frame to the 444-10 profile is indicated by profile_idc equal to 55
+    else if(frame_info.profile_idc == 55 && 
+            frame_info.chroma_format_idc >= 2 && frame_info.chroma_format_idc <= 3  &&  
+            frame_info.bit_depth_minus8 == 2 && 
+            pbu_header.pbu_type == 1 )
+    {
+        if(frame_info.chroma_format_idc == 2) {
+            st->codecpar->format = AV_PIX_FMT_YUV422P10;
+        } else {
+            st->codecpar->format = AV_PIX_FMT_YUV444P10;
+        }
+    }
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.4
+    // Conformance of a coded frame to the 444-12 profile is indicated by profile_idc equal to 66
+    else if(frame_info.profile_idc == 66 && 
+            frame_info.chroma_format_idc >= 2 && frame_info.chroma_format_idc <= 3  &&  
+            frame_info.bit_depth_minus8 >= 2 && frame_info.bit_depth_minus8 <= 4 && 
+            pbu_header.pbu_type == 1 )
+    {
+            if(frame_info.chroma_format_idc == 2) {
+                if(frame_info.bit_depth_minus8 == 2) {
+                    st->codecpar->format = AV_PIX_FMT_YUV422P10;
+                } else {
+                    st->codecpar->format = AV_PIX_FMT_YUV422P12;
+                }
+            } else {
+                if(frame_info.bit_depth_minus8 == 2) {
+                    st->codecpar->format = AV_PIX_FMT_YUV444P10;
+                } else {
+                    st->codecpar->format = AV_PIX_FMT_YUV444P12;
+                }
+            }  
+    }
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.5
+    // Conformance of a coded frame to the 4444-10 profile is indicated by profile_idc equal to 77
+    else if(frame_info.profile_idc == 77 && 
+            frame_info.chroma_format_idc >= 2 && frame_info.chroma_format_idc <= 4  &&  
+            frame_info.bit_depth_minus8 == 2  && 
+            pbu_header.pbu_type == 1 )
+    {
+        if(frame_info.chroma_format_idc == 2) {
+            st->codecpar->format = AV_PIX_FMT_YUV422P10;
+        } else if (frame_info.chroma_format_idc == 3) {
+            st->codecpar->format = AV_PIX_FMT_YUV444P10;
+        } else {
+            st->codecpar->format = AV_PIX_FMT_YUVA444P10;
+        }
+    }
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.6
+    // Conformance of a coded frame to the 4444-12 profile is indicated by profile_idc equal to 88
+    else if(frame_info.profile_idc == 88 && 
+        frame_info.chroma_format_idc >= 2 && frame_info.chroma_format_idc <= 4  &&  
+        frame_info.bit_depth_minus8 >= 2 && frame_info.bit_depth_minus8 <= 4 &&
+        pbu_header.pbu_type == 1 )
+    {
+        if(frame_info.chroma_format_idc == 2) {
+            if(frame_info.bit_depth_minus8 == 2) {
+                st->codecpar->format = AV_PIX_FMT_YUV422P10;
+            } else {
+                st->codecpar->format = AV_PIX_FMT_YUV422P12;
+            }
+        } else if(frame_info.chroma_format_idc == 3) {
+            if(frame_info.bit_depth_minus8 == 2) {
+                st->codecpar->format = AV_PIX_FMT_YUV444P10;
+            } else {
+                st->codecpar->format = AV_PIX_FMT_YUV444P12;
+            }
+        } else {
+            if(frame_info.bit_depth_minus8 == 2) {
+                st->codecpar->format = AV_PIX_FMT_YUVA444P10;
+            } else {
+                st->codecpar->format = AV_PIX_FMT_YUVA444P12;
+            }
+        }  
+    }
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.7
+    // Conformance of a coded frame to the 400-10 profile is indicated by profile_idc equal to 99
+    else if(frame_info.profile_idc == 99 && 
+            frame_info.chroma_format_idc == 0  &&  
+            frame_info.bit_depth_minus8 == 2 &&
+            pbu_header.pbu_type == 1 )
+    {
+        st->codecpar->format = AV_PIX_FMT_GRAY10;
+    } else {
+        st->codecpar->format = AV_PIX_FMT_NONE;
+    }
+
+    // This causes sending to the parser full frames, not chunks of data
+    // The flag PARSER_FLAG_COMPLETE_FRAMES will be set in demux.c (demux.c: 1316)
+    sti->need_parsing = AVSTREAM_PARSE_HEADERS; // AVSTREAM_PARSE_NONE;//
+
+    st->avg_frame_rate = c->framerate;
+
+    // taken from rawvideo demuxers
+    avpriv_set_pts_info(st, 64, 1, 1200000);
+
+    return 0;
+}
 
 static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
@@ -248,6 +589,52 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
     return ret;
 }
 
+static int apv_read_packet2(AVFormatContext *s, AVPacket *pkt)
+{
+    int ret;
+    uint32_t au_size;
+    //uint32_t pbu_size;
+    uint8_t buf[APV_AU_SIZE_PREFIX_LENGTH];
+
+    int eof = avio_feof (s->pb);
+    if(eof) {
+        return AVERROR_EOF;
+    }
+
+    ret = ffio_ensure_seekback(s->pb, APV_AU_SIZE_PREFIX_LENGTH);
+    if (ret < 0)
+        return ret;
+
+    ret = avio_read(s->pb, buf, APV_AU_SIZE_PREFIX_LENGTH);
+    if (ret < 0) {
+        return ret;
+    }
+    if (ret != APV_AU_SIZE_PREFIX_LENGTH)
+        return AVERROR_INVALIDDATA;
+
+    au_size = apv_read_au_size(buf, APV_AU_SIZE_PREFIX_LENGTH, s);
+    if (!au_size || au_size > INT_MAX)
+            return AVERROR_INVALIDDATA;
+
+    
+    //////////////////////////
+
+
+    /////////////////////////
+    // avio_seek(s->pb, -APV_FRAME_DATA_SIZE_PREFIX_LENGTH, SEEK_CUR);
+
+    // put the FrameData into pkt
+    ret = av_get_packet(s->pb, pkt, au_size);
+    if (ret < 0)
+        return ret;
+
+    if (ret != au_size)
+        return AVERROR_INVALIDDATA;
+
+    return ret;
+}
+
+
 static int apv_read_close(AVFormatContext *s)
 {
     APVDemuxContext *const c = s->priv_data;
@@ -256,23 +643,18 @@ static int apv_read_close(AVFormatContext *s)
     return 0;
 }
 
-const AVInputFormat ff_apv_demuxer = {
-    .name           = "apv",
-    .long_name      = NULL_IF_CONFIG_SMALL("APV Annex B"),
-    .read_probe     = apv_annexb_probe,
-    .read_header    = apv_read_header, // annexb_read_header
-    .read_packet    = apv_read_packet, // annexb_read_packet
+const FFInputFormat ff_apv_demuxer = {
+    .p.name           = "apv",
+    .p.long_name      = NULL_IF_CONFIG_SMALL("APV Annex B"),
+    .p.extensions     = "apv",
+    .p.flags        = AVFMT_GENERIC_INDEX,
+    .p.priv_class   = &apv_demuxer_class,
+    .p.codec_tag = MKTAG('a','p','v','1'), 
+    .read_probe     = apv_annexb_probe2,
+    .read_header    = apv_read_header2, // annexb_read_header
+    .read_packet    = apv_read_packet2, // annexb_read_packet
     .read_close     = apv_read_close,
-    .extensions     = "apv",
-    .flags          = AVFMT_GENERIC_INDEX,
-    .flags_internal = FF_FMT_INIT_CLEANUP,
+    .flags_internal = FF_INFMT_FLAG_INIT_CLEANUP,
     .raw_codec_id   = AV_CODEC_ID_APV,
     .priv_data_size = sizeof(APVDemuxContext),
-
-    // @todo Change tag for APV format 
-    // The tag value for APV format is temporary.
-    // It will be changed when the appropriate value appears in the standard describing the APV format.
-    .codec_tag = MKTAG('a','p','v','1'), 
-    
-    .priv_class     = &apv_demuxer_class,
 };
