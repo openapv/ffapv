@@ -53,7 +53,18 @@ const uint16_t ScanOrder[APV_BLOCK_D] = {
     53,   60,   61,   54,   47,   55,   62,   63,
 };
 
-// @see WD1_APV_spec 7.3.1.3 Tile info syntax
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.3
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-primitive-bitstream-unit-he
+int ff_apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
+{
+    pbuh->pbu_type                      = get_bits(gb, 8);
+    pbuh->group_id                      = get_bits(gb, 16);
+    pbuh->reserved_zer_8bits            = get_bits(gb, 8);
+        
+    return 0;
+}
+
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile-info
 int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileInfo *ti)
 {
     // @see WD1_APV_spec section 6.2 Source, decoded and output frame formats
@@ -71,8 +82,8 @@ int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileIn
     ti->tile_width_in_mbs_minus1 = get_bits(gb, 28);
     ti->tile_height_in_mbs_minus1 = get_bits(gb, 28);
 
-    FrameWidthInSamplesY = fdh->frame_width_minus1 + 1;
-    FrameHeightInSamplesY = fdh->frame_height_minus1 + 1;
+    FrameWidthInSamplesY = fdh->frame_info.frame_width_minus1 + 1;
+    FrameHeightInSamplesY = fdh->frame_info.frame_height_minus1 + 1;
     FrameWidthInMbsY = ceil( FrameWidthInSamplesY / MbWidth );
     FrameHeightInMbsY = ceil( FrameHeightInSamplesY / MbHeight );
 
@@ -113,8 +124,8 @@ int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileIn
     // remember to free it
     ti->tile_size_minus1 = malloc(sizeof(uint32_t) * ti->NumTiles);
 
-    for( i = 0; i < ti->NumTiles - 1; i++ )
-        ti->tile_size_minus1[i] = get_bits(gb, 24);
+    for( i = 0; i < ti->NumTiles ; i++ )
+        ti->tile_size_minus1[i] = get_bits(gb, 32);
 
     return 0;
 }
@@ -142,9 +153,9 @@ int ff_apv_byte_alignment(GetBitContext *gb, APVByteAlignemnt *ba)
 }
 
 // @see WD1_APV_spec 7.3.1.2 Quantization matrix syntax
-int ff_apv_quantization_matrix(GetBitContext *gb, APVQuantizationMatrix *qm)
+int ff_apv_quantization_matrix(GetBitContext *gb, int num_comp, APVQuantizationMatrix *qm)
 {
-    for( int cIdx = 0; cIdx < 3; cIdx ++ ) {
+    for( int cIdx = 0; cIdx < num_comp; cIdx ++ ) {
         for( int y = 0; y < 8; y ++ ) {
             for( int x = 0; x < 8; x ++ )
                 qm->q_matrix_minus1[ cIdx ][ x ][ y ] = get_bits(gb, 8);
@@ -153,42 +164,108 @@ int ff_apv_quantization_matrix(GetBitContext *gb, APVQuantizationMatrix *qm)
     return 0;
 }
 
-// @see WD1_APV_spec 7.3.1.1 Frame header syntax
-int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *fdh)
+// https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-information
+int ff_apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *frame_info)
 {
+    frame_info->profile_idc                    = get_bits(gb, 8);
+    frame_info->level_idc                      = get_bits(gb, 8);
+    frame_info->band_idc                       = get_bits(gb, 3);
+    frame_info->reserved_zero_5bits            = get_bits(gb, 5);
+    frame_info->frame_width_minus1             = get_bits(gb, 32);
+    frame_info->frame_height_minus1            = get_bits(gb, 32);
+    frame_info->chroma_format_idc              = get_bits(gb, 4);
+    frame_info->bit_depth_minus8               = get_bits(gb, 4);
+    frame_info->capture_time_distance          = get_bits(gb, 8);
+    frame_info->reserved_zero_8bits            = get_bits(gb, 8);
+    
+    return 0;
+}
 
-    int ret = 0;
-    // @todo parese frame header
-    fdh->frame_header_size = get_bits(gb, 16);
-    fdh->profile_idc = get_bits(gb, 8);
-    fdh->level_idc = get_bits(gb, 8);
-    fdh->reserved_zero_8bits = get_bits(gb, 8);
-    fdh->frame_width_minus1 = get_bits(gb, 32);
-    fdh->frame_height_minus1 = get_bits(gb, 32);
-
-    // @todo documentation inconsistency with the reference implementation.
-    //
-    // The reference application uses 4 bits for chroma_format_idc
-    // while the documentation says that chroma_format_idc takes up 2 bits in the header
-    fdh->chroma_format_idc = get_bits(gb, 4);
-    fdh->bit_depth_minus8 = get_bits(gb, 4);
-    fdh->capture_time_distance = get_bits(gb, 8);
-    fdh->reserved_zero_16bits = get_bits(gb, 16);
-    fdh->color_description_present_flag = get_bits(gb, 1);
-
-    if(fdh->color_description_present_flag) {
-        fdh->color_primaries = get_bits(gb, 8);
-        fdh->transfer_characteristics = get_bits(gb, 8);
-        fdh->matrix_coefficients = get_bits(gb, 8);
+static int num_component(int chroma_format_idc) {
+    int NumComp = 0;
+    
+    switch (chroma_format_idc)
+    {
+    case 0:
+        NumComp = 1;
+        break;
+    case 2:
+    case 3:
+        NumComp = 3;
+        break;
+    case 4:
+        NumComp = 4;
+        break;
+    
+    default:
+        break;
     }
-    fdh->use_q_matrix = get_bits(gb, 1);
-    if(fdh->use_q_matrix)
-        ret = ff_apv_quantization_matrix(gb, &fdh->quantization_matrix);
+    return NumComp;
+}
 
-    ff_apv_tile_info(gb, fdh, &fdh->tile_info);
-    fdh->reserved_zero_8bits_2 = get_bits(gb, 8);
+static int sub_width_c(int chroma_format_idc) {
+    int SubWidthC = 0;
+    
+    switch (chroma_format_idc)
+    {
+    case 0:
+        SubWidthC = 1;
+        break;
+    case 2:
+        SubWidthC = 2;
+        break;
+    case 3:
+        SubWidthC = 1;
+        break;
+    case 4:
+        SubWidthC = 1;
+        break;
+    
+    default:
+        break;
+    }
+    return SubWidthC;
+}
 
-    ff_apv_byte_alignment(gb, &fdh->byte_alignent);
+static int apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
+{
+    pbuh->pbu_type                      = get_bits(gb, 8);
+    pbuh->group_id                      = get_bits(gb, 16);
+    pbuh->reserved_zer_8bits            = get_bits(gb, 8);
+        
+    return 0;
+}
+
+// @see WD1_APV_spec 7.3.1.1 Frame header syntax
+int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *frame_header)
+{
+    int ret = 0;
+
+    ret = ff_apv_parse_frame_info(gb, &frame_header->frame_info);
+    
+    frame_header->reserved_zero_8bits = get_bits(gb, 8);
+    frame_header->color_description_present_flag = get_bits(gb, 1);
+
+    if(frame_header->color_description_present_flag) {
+        frame_header->color_primaries = get_bits(gb, 8);
+        frame_header->transfer_characteristics = get_bits(gb, 8);
+        frame_header->matrix_coefficients = get_bits(gb, 8);
+    }
+    
+    frame_header->use_q_matrix = get_bits(gb, 1);
+
+    int NumComp = num_component(frame_header->frame_info.chroma_format_idc);
+    if(NumComp == 0) {
+        return -1;
+    }
+    
+    if(frame_header->use_q_matrix)
+        ret = ff_apv_quantization_matrix(gb, NumComp, &frame_header->quantization_matrix);
+
+    ff_apv_tile_info(gb, frame_header, &frame_header->tile_info);
+    frame_header->reserved_zero_8bits_2 = get_bits(gb, 8);
+
+    ff_apv_byte_alignment(gb, &frame_header->byte_alignent);
 
     return ret;
 }
@@ -280,7 +357,7 @@ static int macroblock_layer( GetBitContext *gb, const APVFrameDataHeader *fdh, u
 
     // @see 6.2 Source, decoded and output frame formats
     // @see Table 2 — SubWidthC and SubHeightC values derived from chroma_format_idc
-    uint32_t SubWidthC = (fdh->chroma_format_idc == 2) ? 2 : 1;
+    uint32_t SubWidthC = (fdh->frame_info.chroma_format_idc == 2) ? 2 : 1;
     uint32_t SubHeightC = 1;
 
     // @see 6.2 Source, decoded and output frame formats
