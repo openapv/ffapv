@@ -101,7 +101,6 @@ static int apv_extract_header_info(GetByteContext *gbc)
         // Odd bit depths are technically valid but not useful here.
         return AVERROR_INVALIDDATA;
     }
-
     // Ignore capture_time_distance.
     bytestream2_skip(gbc, 1);
 
