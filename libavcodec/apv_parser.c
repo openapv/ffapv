@@ -134,6 +134,38 @@ static int apv_parse(AVCodecParserContext *s, AVCodecContext *avctx,
     return next;
 }
 
+static int apv_parse2(AVCodecParserContext *s, AVCodecContext *avctx,
+                     const uint8_t **poutbuf, int *poutbuf_size,
+                     const uint8_t *buf, int buf_size)
+{
+    int next;
+    int ret;
+    APVParserContext *ctx = s->priv_data;
+
+    s->picture_structure = AV_PICTURE_STRUCTURE_FRAME;
+    s->key_frame = 1;
+
+    if (avctx->extradata && !ctx->parsed_extradata) {
+        decode_extradata(s, avctx);
+        ctx->parsed_extradata = 1;
+    }
+
+    next = buf_size;
+
+    // ret = parse_apv_bitstream(s, avctx, buf, buf_size);
+    // if(ret < 0) {
+    //     *poutbuf      = NULL;
+    //     *poutbuf_size = 0;
+    //     return buf_size;
+    // }
+
+    // poutbuf contains just one Frame Data Unit
+    *poutbuf      = buf;
+    *poutbuf_size = buf_size;
+
+    return next;
+}
+
 static void apv_parser_close(AVCodecParserContext *s)
 {
     APVParserContext *ctx = s->priv_data;
@@ -144,6 +176,6 @@ static void apv_parser_close(AVCodecParserContext *s)
 const AVCodecParser ff_apv_parser = {
     .codec_ids      = { AV_CODEC_ID_APV },
     .priv_data_size = sizeof(APVParserContext),
-    .parser_parse   = apv_parse,
+    .parser_parse   = apv_parse2,
     .parser_close   = apv_parser_close,
 };
