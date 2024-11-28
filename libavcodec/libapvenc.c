@@ -24,7 +24,7 @@
 #include <float.h>
 #include <stdlib.h>
 
-#include <apv/apv.h>
+#include <oapv/oapv.h>
 
 #include "libavutil/internal.h"
 #include "libavutil/common.h"
@@ -35,6 +35,8 @@
 #include "libavutil/cpu.h"
 #include "libavutil/avstring.h"
 #include "libavutil/mem.h"
+#include "libavutil/avassert.h"
+
 
 #include "avcodec.h"
 #include "internal.h"
@@ -43,7 +45,21 @@
 #include "profiles.h"
 #include "encode.h"
 
-#define MAX_BS_BUF (16*1024*1024)
+#define MAX_BS_BUF   (128 * 1024 * 1024)
+#define MAX_NUM_FRMS (1)           // supports only 1-frame in an access unit
+#define FRM_IDX      (0)           // supports only 1-frame in an access unit
+#define MAX_NUM_CC   (OAPV_MAX_CC) // Max number of color componets (upto 4:4:4:4)
+
+#define CLIP_VAL(n, min, max) (((n) > (max)) ? (max) : (((n) < (min)) ? (min) : (n)))
+#define ALIGN_VAL(val, align) ((((val) + (align) - 1) / (align)) * (align))
+
+#define assert_rv(x, r)     \
+    {                       \
+        if(!(x)) {          \
+            av_assert0(x);  \
+            return (r);     \
+        }                   \
+    }
 
 /**
  * The structure stores all the states associated with the instance of APV encoder
@@ -51,38 +67,41 @@
 typedef struct ApvEncContext {
     const AVClass *class;
 
-    apve_t id;            // APV instance identifier
-    apve_cdsc_t cdsc;     // coding parameters i.e profile, width & height of input frame, num of therads, frame rate ...
-    apv_bitb_t bitb;      // bitstream buffer (output)
-    apve_stat_t stat;     // encoding status (output)
-    apv_imgb_t imgb_inp;  // image buffer (input)
+    oapve_t id;             // APV instance identifier
+    oapvm_t mid;
+    oapve_cdesc_t   cdsc;   // coding parameters i.e profile, width & height of input frame, num of therads, frame rate ...
+    oapv_bitb_t     bitb;   // bitstream buffer (output)
+    oapve_stat_t    stat;   // encoding status (output)
+    
+    oapv_imgb_t *imgb_r;    // image buffer for read
+    oapv_imgb_t *imgb_i;    // image buffer for input
+    oapv_frms_t ifrms;      // frames for input
 
-    // @todo check whether needed
-    apv_imgb_t imgb_rec;  // recon image
+    int num_frames;         // number of frames in an access unit
+    
+    int profile_id;         // encoder profile (baseline)
+                            // the first version of the APV codec defines a profile, Baseline profile,
+                            // which supports 16x16 MB size and 8x8 transform size.
 
-    int profile_id;     // encoder profile (baseline)
-                        // the first version of the APV codec defines a profile, Baseline profile,
-                        // which supports 16x16 MB size and 8x8 transform size.
-
-    int preset_id;      // preset of apv ( fast, medium, slow, placebo)
-    int tune_id;        // tune of apv (psnr, zerolatency)
+    int preset_id;          // preset of apv ( fast, medium, slow, placebo)
+    int tune_id;            // tune of apv (psnr, zerolatency)
 
     // variables for rate control types
-    int rc_type;        // Rate control type [ 0(OFF) / 1(ABR) / 2(CRF) ]
+    int rc_type;            // Rate control type [ 0(OFF) / 1(ABR) / 2(CRF) ]
 
-    int qp;             // quantization parameter (QP) [0,51]
-    int crf;            // constant rate factor (CRF) [10,49]
+    int qp;                 // quantization parameter (QP) [0,51]
+    int crf;                // constant rate factor (CRF) [10,49]
 
-    int hash;           // embed picture signature (HASH) for conformance checking in decoding
+    int hash;               // embed picture signature (HASH) for conformance checking in decoding
 
-    int complexity;     // encoder complexity [ 0(no rdo) / 1( enable rdo quantization daed-zone) ]
+    int complexity;         // encoder complexity [ 0(no rdo) / 1( enable rdo quantization daed-zone) ]
 
-    int input_depth;    // input data bit depth (8, 10)
-    int input_csp;      // input data color space (chroma format)
-                        //  - 0: YUV400
-                        //  - 1: YUV420
-                        //  - 2: YUV422
-                        //  - 3: YUV444
+    int input_depth;        // input data bit depth (8, 10)
+    int input_csp;          // input data color space (chroma format)
+                            //  - 0: YUV400
+                            //  - 1: YUV420
+                            //  - 2: YUV422
+                            //  - 3: YUV444
 
     int qp_cb_offset;
     int qp_cr_offset;
@@ -97,42 +116,398 @@ typedef struct ApvEncContext {
 } ApvEncContext;
 
 /**
+ * Convert FFmpeg pixel format (AVPixelFormat) into APV pre-defined color format
+ *
+ * @param[in] px_fmt pixel format (@see https://ffmpeg.org/doxygen/trunk/pixfmt_8h.html#a9a8e335cf3be472042bc9f0cf80cd4c5)
+ *
+ * @return APV pre-defined color format (@see oapv.h) on success, OAPV_CF_UNKNOWN on failure
+ */
+static int libapve_apv_color_format(enum AVPixelFormat av_pix_fmt)
+{
+    int cf = OAPV_CF_UNKNOWN;
+
+    switch (av_pix_fmt) {
+    case AV_PIX_FMT_YUV422P10:
+        cf = OAPV_CF_YCBCR422;
+        break;
+    case AV_PIX_FMT_YUV444P10:
+        cf = OAPV_CF_YCBCR444;
+        break;
+    case AV_PIX_FMT_YUV422P12:
+        cf = OAPV_CF_YCBCR422;
+        break;
+    case AV_PIX_FMT_YUV444P12:
+        cf = OAPV_CF_YCBCR444;
+        break;
+    default:
+        cf = OAPV_CF_UNKNOWN;
+        break;
+    }
+
+    return cf;
+}
+
+/**
  * Convert FFmpeg pixel format (AVPixelFormat) into APV pre-defined color space
  *
  * @param[in] px_fmt pixel format (@see https://ffmpeg.org/doxygen/trunk/pixfmt_8h.html#a9a8e335cf3be472042bc9f0cf80cd4c5)
  *
- * @return APV pre-defined color space (@see apv.h) on success, APV_CF_UNKNOWN on failure
+ * @return APV pre-defined color space (@see oapv.h) on success, OAPV_CS_UNKNOWN on failure
  */
 static int libapve_apv_color_space(enum AVPixelFormat av_pix_fmt)
 {
-    int cs = APV_CS_UNKNOWN;
+    int cs = OAPV_CS_UNKNOWN;
 
     switch (av_pix_fmt) {
     case AV_PIX_FMT_YUV422P10:
-        cs = APV_CS_SET(APV_CS_YCBCR422, 10, AV_HAVE_BIGENDIAN);
+        cs = OAPV_CS_SET(OAPV_CF_YCBCR422, 10, AV_HAVE_BIGENDIAN);
         break;
     case AV_PIX_FMT_YUV444P10:
-        cs = APV_CS_SET(APV_CS_YCBCR444, 10, AV_HAVE_BIGENDIAN);
+        cs = OAPV_CS_SET(OAPV_CF_YCBCR444, 10, AV_HAVE_BIGENDIAN);
         break;
     case AV_PIX_FMT_YUV422P12:
-        cs = APV_CS_SET(APV_CS_YCBCR422, 12, AV_HAVE_BIGENDIAN);
+        cs = OAPV_CS_SET(OAPV_CF_YCBCR422, 12, AV_HAVE_BIGENDIAN);
         break;
     case AV_PIX_FMT_YUV444P12:
-        cs = APV_CS_SET(APV_CS_YCBCR444, 12, AV_HAVE_BIGENDIAN);
+        cs = OAPV_CS_SET(OAPV_CF_YCBCR444, 12, AV_HAVE_BIGENDIAN);
         break;
     default:
-        cs = APV_CS_UNKNOWN;
+        cs = OAPV_CS_UNKNOWN;
         break;
     }
 
     return cs;
 }
 
+/* Function for atomic increament:
+   This function might need to modify according to O/S or CPU platform
+*/
+static int apv_atomic_inc(volatile int* pcnt)
+{
+    int ret;
+    ret = *pcnt;
+    ret++;
+    *pcnt = ret;
+    return ret;
+}
+
+/* Function for atomic decrement:
+   This function might need to modify according to O/S or CPU platform
+*/
+static int apv_atomic_dec(volatile int* pcnt)
+{
+    int ret;
+    ret = *pcnt;
+    ret--;
+    *pcnt = ret;
+    return ret;
+}
+
+/* Function to allocate memory for picture buffer:
+   This function might need to modify according to O/S or CPU platform
+*/
+static void * apv_picbuf_alloc(int size)
+{
+    return malloc(size);
+}
+
+/* Function to free memory allocated for picture buffer:
+   This function might need to modify according to O/S or CPU platform
+*/
+static void apv_picbuf_free(void* p)
+{
+    if (p) {free(p);}
+}
+
+static int apv_imgb_addref(oapv_imgb_t * imgb)
+{
+    // assert_rv(imgb, OAPV_ERR_INVALID_ARGUMENT);
+    if(!imgb) {
+        av_assert0(imgb);
+        return OAPV_ERR_INVALID_ARGUMENT;
+    }
+    return apv_atomic_inc(&imgb->refcnt);
+}
+
+static int apv_imgb_getref(oapv_imgb_t * imgb)
+{
+    // assert_rv(imgb, OAPV_ERR_INVALID_ARGUMENT);
+    if(!imgb) {
+        av_assert0(imgb);
+        return OAPV_ERR_INVALID_ARGUMENT;
+    }
+    return imgb->refcnt;
+}
+
+static int apv_imgb_release(oapv_imgb_t * imgb)
+{
+    int refcnt, i;
+    // assert_rv(imgb, OAPV_ERR_INVALID_ARGUMENT);
+    if(!imgb) {
+        av_assert0(imgb);
+        return OAPV_ERR_INVALID_ARGUMENT;
+    }
+
+    refcnt = apv_atomic_dec(&imgb->refcnt);
+    if(refcnt == 0) {
+        for(i=0; i<OAPV_MAX_CC; i++) {
+            if (imgb->baddr[i]) apv_picbuf_free(imgb->baddr[i]);
+        }
+        free(imgb);
+    }
+    return refcnt;
+}
+
 /**
- * The function returns a pointer to the object of the apve_cdsc_t type.
- * apve_cdsc_t contains all encoder parameters that should be initialized before the encoder is used.
+ * @brief Create image
  *
- * The field values of the apve_cdsc structure are populated based on:
+ * @param w width
+ * @param h height
+ * @param cs color space
+ * @return oapv_imgb_t*
+ */
+static oapv_imgb_t * apv_imgb_create(int w, int h, int cs, struct AVCodecContext *avctx)
+{
+    int i, bd;
+    oapv_imgb_t * imgb;
+
+    imgb = (oapv_imgb_t *)malloc(sizeof(oapv_imgb_t));
+    if(imgb == NULL) goto ERR;
+    memset(imgb, 0, sizeof(oapv_imgb_t));
+
+    bd = OAPV_CS_GET_BYTE_DEPTH(cs); /* byte unit */
+
+    imgb->w[0] = w;
+    imgb->h[0] = h;
+    switch(OAPV_CS_GET_FORMAT(cs))
+    {
+    case OAPV_CF_YCBCR400:
+        imgb->w[1] = imgb->w[2] = w;
+        imgb->h[1] = imgb->h[2] = h;
+        imgb->np = 1;
+        break;
+    case OAPV_CF_YCBCR420:
+        imgb->w[1] = imgb->w[2] = (w + 1) >> 1;
+        imgb->h[1] = imgb->h[2] = (h + 1) >> 1;
+        imgb->np = 3;
+        break;
+    case OAPV_CF_YCBCR422:
+        imgb->w[1] = imgb->w[2] = (w + 1) >> 1;
+        imgb->h[1] = imgb->h[2] = h;
+        imgb->np = 3;
+        break;
+    case OAPV_CF_YCBCR444:
+        imgb->w[1] = imgb->w[2] = w;
+        imgb->h[1] = imgb->h[2] = h;
+        imgb->np = 3;
+        break;
+   case OAPV_CF_YCBCR4444:
+        imgb->w[1] = imgb->w[2] = imgb->w[3] = w;
+        imgb->h[1] = imgb->h[2] = imgb->h[3] = h;
+        imgb->np = 4;
+        break;
+    case OAPV_CF_PLANAR2:
+        imgb->w[1] = w;
+        imgb->h[1] = h;
+        imgb->np = 2;
+        break;
+    default:
+        av_log(avctx, AV_LOG_ERROR, "unsupported color format\n");
+        goto ERR;
+    }
+
+    for(i = 0; i < imgb->np; i++)
+    {
+        imgb->aw[i] = ALIGN_VAL(imgb->w[i], OAPV_MB_W);
+        imgb->s[i] = imgb->aw[i] * bd;
+        imgb->ah[i] = ALIGN_VAL(imgb->h[i], OAPV_MB_H);
+        imgb->e[i] = imgb->ah[i];
+
+        imgb->bsize[i] = imgb->s[i] * imgb->e[i];
+        imgb->a[i] = imgb->baddr[i] = apv_picbuf_alloc(imgb->bsize[i]);
+        if(imgb->a[i] == NULL) goto ERR;
+
+        memset(imgb->a[i], 0, imgb->bsize[i]);
+    }
+    imgb->cs = cs;
+    imgb->addref = apv_imgb_addref;
+    imgb->getref = apv_imgb_getref;
+    imgb->release = apv_imgb_release;
+
+    imgb->addref(imgb); /* increase reference count */
+    return imgb;
+
+ERR:
+    av_log(avctx, AV_LOG_ERROR, "cannot create image buffer\n");
+    if(imgb)
+    {
+        for (int i = 0; i < OAPV_MAX_CC; i++)
+        {
+            if(imgb->a[i]) free(imgb->a[i]);
+        }
+        free(imgb);
+    }
+    return NULL;
+}
+
+static void apv_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
+{
+    int            i, j;
+    unsigned char *s, *d;
+    int            numbyte = OAPV_CS_GET_BYTE_DEPTH(src->cs);
+
+    for(i = 0; i < src->np; i++) {
+        s = (unsigned char *)src->a[i];
+        d = (unsigned char *)dst->a[i];
+
+        for(j = 0; j < src->ah[i]; j++) {
+            memcpy(d, s, numbyte * src->aw[i]);
+            s += src->s[i];
+            d += dst->s[i];
+        }
+    }
+}
+
+static void apv_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+{
+    int            i, j, k;
+
+    unsigned char *s;
+    short         *d;
+
+    for(i = 0; i < dst->np; i++) {
+        s = (unsigned char *)src->a[i];
+        d = (short *)dst->a[i];
+
+        for(j = 0; j < src->ah[i]; j++) {
+            for(k = 0; k < src->aw[i]; k++) {
+                d[k] = (short)(s[k] << shift);
+            }
+            s = s + src->s[i];
+            d = (short *)(((unsigned char *)d) + dst->s[i]);
+        }
+    }
+}
+
+static void apv_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+{
+    int            i, j, k, t0, add;
+
+    short         *s;
+    unsigned char *d;
+
+    if(shift)
+        add = 1 << (shift - 1);
+    else
+        add = 0;
+
+    for(i = 0; i < dst->np; i++) {
+        s = (short *)src->a[i];
+        d = (unsigned char *)dst->a[i];
+
+        for(j = 0; j < src->ah[i]; j++) {
+            for(k = 0; k < src->aw[i]; k++) {
+                t0 = ((s[k] + add) >> shift);
+                d[k] = (unsigned char)(CLIP_VAL(t0, 0, 255));
+            }
+            s = (short *)(((unsigned char *)s) + src->s[i]);
+            d = d + dst->s[i];
+        }
+    }
+}
+
+static void apv_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+{
+    int             i, j, k;
+
+    unsigned short *s;
+    unsigned short *d;
+
+    for(i = 0; i < dst->np; i++) {
+        s = (unsigned short *)src->a[i];
+        d = (unsigned short *)dst->a[i];
+
+        for(j = 0; j < src->h[i]; j++) {
+            for(k = 0; k < src->w[i]; k++) {
+                d[k] = (unsigned short)(s[k] << shift);
+            }
+            s = (unsigned short *)(((unsigned char *)s) + src->s[i]);
+            d = (unsigned short *)(((unsigned char *)d) + dst->s[i]);
+        }
+    }
+}
+
+static void apv_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+{
+    int             i, j, k, t0, add;
+
+    int             clip_min = 0;
+    int             clip_max = 0;
+
+    unsigned short *s;
+    unsigned short *d;
+
+    if(shift)
+        add = 1 << (shift - 1);
+    else
+        add = 0;
+
+    clip_max = (1 << (OAPV_CS_GET_BIT_DEPTH(dst->cs))) - 1;
+
+    for(i = 0; i < dst->np; i++) {
+        s = (unsigned short *)src->a[i];
+        d = (unsigned short *)dst->a[i];
+
+        for(j = 0; j < src->h[i]; j++) {
+            for(k = 0; k < src->w[i]; k++) {
+                t0 = ((s[k] + add) >> shift);
+                d[k] = (CLIP_VAL(t0, clip_min, clip_max));
+            }
+            s = (unsigned short *)(((unsigned char *)s) + src->s[i]);
+            d = (unsigned short *)(((unsigned char *)d) + dst->s[i]);
+        }
+    }
+}
+
+static void apv_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, AVCodecContext *avctx)
+{
+    int i, bd_src, bd_dst;
+    bd_src = OAPV_CS_GET_BIT_DEPTH(src->cs);
+    bd_dst = OAPV_CS_GET_BIT_DEPTH(dst->cs);
+
+    if(src->cs == dst->cs) {
+        apv_imgb_cpy_plane(dst, src);
+    }
+    else if(bd_src == 8 && bd_dst > 8) {
+        apv_imgb_cpy_shift_left_8b(dst, src, bd_dst - bd_src);
+    }
+    else if(bd_src > 8 && bd_dst == 8) {
+        apv_imgb_cpy_shift_right_8b(dst, src, bd_src - bd_dst);
+    }
+    else if(bd_src < bd_dst) {
+        apv_imgb_cpy_shift_left(dst, src, bd_dst - bd_src);
+    }
+    else if(bd_src > bd_dst) {
+        apv_imgb_cpy_shift_right(dst, src, bd_src - bd_dst);
+    }
+    else {
+        av_log(avctx, AV_LOG_ERROR, "ERROR: unsupported image copy\n");
+        return;
+    }
+    for(i = 0; i < OAPV_MAX_CC; i++) {
+        dst->x[i] = src->x[i];
+        dst->y[i] = src->y[i];
+        dst->w[i] = src->w[i];
+        dst->h[i] = src->h[i];
+        dst->ts[i] = src->ts[i];
+    }
+}
+
+/**
+ * The function returns a pointer to the object of the oapve_cdesc_t type.
+ * oapve_cdesc_t contains all encoder parameters that should be initialized before the encoder is used.
+ *
+ * The field values of the oapve_cdesc_t structure are populated based on:
  * - the corresponding field values of the AvCodecConetxt structure,
  * - the apv encoder specific option values,
  *   (the full list of options available for apv encoder is displayed after executing the command ./ffmpeg --help encoder = libapve)
@@ -152,7 +527,7 @@ static int libapve_apv_color_space(enum AVPixelFormat av_pix_fmt)
  *
  * @return 0 on success, negative error code on failure
  */
-static int get_conf(AVCodecContext *avctx, apve_cdsc_t *cdsc)
+static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 {
     ApvEncContext *apvctx = NULL;
     int ret;
@@ -160,56 +535,59 @@ static int get_conf(AVCodecContext *avctx, apve_cdsc_t *cdsc)
     apvctx = avctx->priv_data;
 
     /* initialize apv_param struct with default values */
-    ret = apve_param_default(&cdsc->param);
-    if (APV_FAILED(ret)) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot set_default parameter\n");
+    ret = oapve_param_default(cdsc->param);
+    if (OAPV_FAILED(ret)) {
+        av_log(avctx, AV_LOG_ERROR, "Cannot set default parameter\n");
         return AVERROR_EXTERNAL;
     }
 
-    /* read options from AVCodecContext */
-    if (avctx->width > 0)
-        cdsc->param.w = avctx->width;
+    for(int i=0;i<OAPV_MAX_NUM_FRAMES;i++) {
+    
+        /* read options from AVCodecContext */
+        if (avctx->width > 0)
+            cdsc->param[i].w = avctx->width;
 
-    if (avctx->height > 0)
-        cdsc->param.h = avctx->height;
+        if (avctx->height > 0)
+            cdsc->param[i].h = avctx->height;
 
-    if (avctx->framerate.num > 0) {
-        // fps can be float number, but apv API doesn't support it
-        cdsc->param.fps = lrintf(av_q2d(avctx->framerate));
-    }
+        if (avctx->framerate.num > 0) {
+            // fps can be float number, but apv API doesn't support it
+            // cdsc->param[i].fps = lrintf(av_q2d(avctx->framerate));
+            cdsc->param[i].fps_num = avctx->framerate.num;
+            cdsc->param[i].fps_den = avctx->framerate.den;
+        }
 
-    cdsc->param.level_idc = avctx->level;
+        cdsc->param[i].level_idc = avctx->level;
 
-    if (avctx->rc_buffer_size)   // VBV buf size
-        cdsc->param.vbv_bufsize = (int)(avctx->rc_buffer_size / 1000);
+        //if (avctx->rc_buffer_size)   // VBV buf size
+        //    cdsc->param[i].vbv_bufsize = (int)(avctx->rc_buffer_size / 1000);
 
-    cdsc->param.rc_type = apvctx->rc_type;
+        cdsc->param[i].rc_type = apvctx->rc_type;
 
-    if (apvctx->rc_type == APV_RC_CQP)
-        cdsc->param.qp = apvctx->qp;
-    else if (apvctx->rc_type == APV_RC_ABR) {
-        if (avctx->bit_rate / 1000 > INT_MAX || avctx->rc_max_rate / 1000 > INT_MAX) {
-            av_log(avctx, AV_LOG_ERROR, "Not supported bitrate bit_rate and rc_max_rate > %d000\n", INT_MAX);
+        if (apvctx->rc_type == OAPV_RC_CQP)
+            cdsc->param[i].qp = apvctx->qp;
+        else if (apvctx->rc_type == OAPV_RC_ABR) {
+            if (avctx->bit_rate / 1000 > INT_MAX || avctx->rc_max_rate / 1000 > INT_MAX) {
+                av_log(avctx, AV_LOG_ERROR, "Not supported bitrate bit_rate and rc_max_rate > %d000\n", INT_MAX);
+                return AVERROR_INVALIDDATA;
+            }
+            cdsc->param[i].bitrate = (int)(avctx->bit_rate / 1000);
+        } else {
+            av_log(avctx, AV_LOG_ERROR, "Not supported rate control type: %d\n", apvctx->rc_type);
             return AVERROR_INVALIDDATA;
         }
-        cdsc->param.bitrate = (int)(avctx->bit_rate / 1000);
-    } else if (apvctx->rc_type == APV_RC_CRF)
-        cdsc->param.crf = apvctx->crf;
-    else {
-        av_log(avctx, AV_LOG_ERROR, "Not supported rate control type: %d\n", apvctx->rc_type);
-        return AVERROR_INVALIDDATA;
+
+        if (avctx->thread_count <= 0) {
+            int cpu_count = av_cpu_count();
+            cdsc->threads = (cpu_count < OAPV_MAX_THREADS) ? cpu_count : OAPV_MAX_THREADS;
+        } else if (avctx->thread_count > OAPV_MAX_THREADS)
+            cdsc->threads = OAPV_MAX_THREADS;
+        else
+            cdsc->threads = avctx->thread_count;
     }
 
-    if (avctx->thread_count <= 0) {
-        int cpu_count = av_cpu_count();
-        cdsc->param.threads = (cpu_count < APV_MAX_THREADS) ? cpu_count : APV_MAX_THREADS;
-    } else if (avctx->thread_count > APV_MAX_THREADS)
-        cdsc->param.threads = APV_MAX_THREADS;
-    else
-        cdsc->param.threads = avctx->thread_count;
-
     apvctx->input_csp = libapve_apv_color_space(avctx->pix_fmt);
-    if(apvctx->input_csp == APV_CS_UNKNOWN) {
+    if(apvctx->input_csp == OAPV_CS_UNKNOWN) {
         av_log(avctx, AV_LOG_ERROR, "Not supported pixel format: %s\n", av_get_pix_fmt_name (avctx->pix_fmt));
         return AVERROR_INVALIDDATA;
     }
@@ -220,7 +598,7 @@ static int get_conf(AVCodecContext *avctx, apve_cdsc_t *cdsc)
 }
 
 /**
- * Set APV_CFG_SET_USE_PIC_SIGNATURE for encoder
+ * Set OAPV_CFG_SET_USE_FRM_HASH for encoder
  *
  * @param[in] logger context
  * @param[in] id APV encodec instance identifier
@@ -228,22 +606,32 @@ static int get_conf(AVCodecContext *avctx, apve_cdsc_t *cdsc)
  *
  * @return 0 on success, negative error code on failure
  */
-static int set_extra_config(AVCodecContext *avctx, apvd_t id, ApvEncContext *ctx)
+static int set_extra_config(AVCodecContext *avctx, oapvd_t id, ApvEncContext *ctx)
 {
-    int ret, size, value;
+    int ret = 0, size, value;
 
     if(ctx->hash) {
         size = 4;
         value = 1;
-        ret = apve_config(id, APV_CFG_SET_USE_PIC_SIGNATURE, &value, &size);
-        if (APV_FAILED(ret)) {
-            av_log(avctx, AV_LOG_ERROR, "Failed to set config for picture signature\n");
+        ret = oapve_config(id, OAPV_CFG_SET_USE_FRM_HASH, &value, &size);
+        if (OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Failed to set config for using frame hash\n");
             return AVERROR_EXTERNAL;
         }
     }
-
-    return 0;
+    return ret;
 }
+
+ static int get_bit_depth(AVCodecContext *avctx, enum AVPixelFormat pixel_format)
+ {
+     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pixel_format);
+     if (desc == NULL) {
+         av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format (%s)\n", av_get_pix_fmt_name(pixel_format));
+         return AVERROR_EXTERNAL;
+     }
+     return desc->comp[0].depth;
+ }
+  
 
 /**
  * @brief Initialize APV codec
@@ -256,20 +644,17 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 {
     ApvEncContext *apvctx = avctx->priv_data;
     unsigned char *bs_buf = NULL;
-    int i;
-    int shift_h = 0;
-    int shift_v = 0;
-    int width_chroma = 0;
-    int height_chroma = 0;
-    apv_imgb_t *imgb_inp = NULL;
 
-    apve_cdsc_t *cdsc =  &(apvctx->cdsc);
+    int cfmt;                               // color format
+    const int num_frames = MAX_NUM_FRMS;    // number of frames in an access unit
+
+    oapve_cdesc_t *cdsc =  &(apvctx->cdsc);
     int ret = 0;
 
     /* allocate bitstream buffer */
-    bs_buf = av_malloc(MAX_BS_BUF);
+    bs_buf = (unsigned char *)av_malloc(MAX_BS_BUF);
     if (bs_buf == NULL) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot allocate bitstream buffer\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot allocate bitstream buffer, size=%d\n", MAX_BS_BUF);
         return AVERROR(ENOMEM);
     }
     apvctx->bitb.addr = bs_buf;
@@ -277,34 +662,21 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 
     /* read configurations and set values for created descriptor (APV_CDSC) */
     if ((ret = get_conf(avctx, cdsc)) != 0) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot get configuration\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot get OAPV configuration\n");
         return AVERROR(EINVAL);
     }
 
-    // @todo provide apve_param_check implementationAV_PIX_FMT_YUV422P10
-    //
-    // if ((ret = apve_param_check(&cdsc->param)) != 0) {
-    //     av_log(avctx, AV_LOG_ERROR, "Invalid configuration\n");
-    //     return AVERROR(EINVAL);
-    // }
-
-    // @todo provide apve_param_parse implementation
-    //
-    // {
-    //     AVDictionaryEntry *en = NULL;
-    //     while (en = av_dict_get(apvctx->apve_params, "", en, AV_DICT_IGNORE_SUFFIX)) {
-    //         if ((ret = apve_param_parse(&cdsc->param, en->key, en->value)) < 0) {
-    //             av_log(avctx, AV_LOG_WARNING,
-    //                    "Error parsing option '%s = %s'.\n",
-    //                    en->key, en->value);
-    //         }
-    //     }
-    // }
-
     /* create encoder */
-    apvctx->id = apve_create(cdsc, NULL);
+    apvctx->id = oapve_create(cdsc, NULL);
     if (apvctx->id == NULL) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot create APV encoder\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot create OAPV encoder\n");
+        return AVERROR_EXTERNAL;
+    }
+
+    /* create metadata handler */
+    apvctx->mid = oapvm_create(&ret);
+    if(apvctx->mid == NULL || OAPV_FAILED(ret)) {
+        av_log(avctx, AV_LOG_ERROR, "cannot create OAPV metadata handler\n");
         return AVERROR_EXTERNAL;
     }
 
@@ -313,11 +685,33 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-    if ((ret = av_pix_fmt_get_chroma_sub_sample(avctx->pix_fmt, &shift_h, &shift_v)) != 0) {
-        av_log(avctx, AV_LOG_ERROR, "Failed to get  chroma shift\n");
-        return AVERROR(EINVAL);
+    apvctx->input_depth = get_bit_depth(avctx, avctx->pix_fmt);
+    if(apvctx->input_depth != 10 && apvctx->input_depth != 12)  {
+        av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format (%s)n", av_get_pix_fmt_name(avctx->pix_fmt));
+        return AVERROR(EINVAL); 
     }
 
+    apvctx->imgb_r = NULL; // image buffer for read
+    apvctx->imgb_i = NULL; // image buffer for input
+    apvctx->num_frames = MAX_NUM_FRMS; // number of frames in an access unit
+
+    cfmt = libapve_apv_color_format(avctx->pix_fmt);
+
+    // create input and reconstruction image buffers
+    memset(&apvctx->ifrms, 0, sizeof(oapv_frms_t));
+    
+    for(int i = 0; i < num_frames; i++) {
+        if(apvctx->input_depth  == 10) {
+            apvctx->ifrms.frm[FRM_IDX].imgb = apv_imgb_create(avctx->width, avctx->height, OAPV_CS_SET(cfmt, apvctx->input_depth, 0), avctx);
+        }
+        else {
+            apvctx->imgb_r = apv_imgb_create(avctx->width, avctx->height, OAPV_CS_SET(cfmt, apvctx->input_depth, 0), avctx);
+            apvctx->ifrms.frm[FRM_IDX].imgb = apv_imgb_create(avctx->width, avctx->height, OAPV_CS_SET(cfmt, 10, 0), avctx);
+        }
+        apvctx->ifrms.num_frms++;
+    }
+    
+#if 0
     // Chroma subsampling
     //
     // YUV format explanation
@@ -340,6 +734,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     imgb_inp->w[1] = imgb_inp->w[2] = imgb_inp->aw[1] = imgb_inp->aw[2] = width_chroma;
     imgb_inp->h[0] = imgb_inp->ah[0] = avctx->height; // height luma
     imgb_inp->h[1] = imgb_inp->h[2] = imgb_inp->ah[1] = imgb_inp->ah[2] = height_chroma;
+#endif
 
     return 0;
 }
@@ -360,51 +755,64 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 {
     ApvEncContext *apvctx =  avctx->priv_data;
     int  ret = -1;
-    int i;
-
-    apv_imgb_t *imgb_inp = NULL;
-
-    imgb_inp = &apvctx->imgb_inp;
 
     if (frame==NULL) {
         return 0;
     }
 
-    for (i = 0; i < imgb_inp->np; i++) {
-        imgb_inp->a[i] = frame->data[i];
-        imgb_inp->s[i] = frame->linesize[i];
+    if(apvctx->input_depth == 10) {
+        apvctx->imgb_i = apvctx->ifrms.frm[FRM_IDX].imgb;
+    }
+    else {
+        apvctx->imgb_i = apvctx->imgb_r;
     }
 
-    imgb_inp->ts[0] = frame->pts;
+    for (int i = 0; i < apvctx->imgb_i->np; i++) {
+        // FIX-ME : need to set properly in case of multi-frame
+        apvctx->imgb_i->a[i] = frame->data[i];
+        apvctx->imgb_i->s[i] = frame->linesize[i];
+    }
 
+    if(apvctx->input_depth != 10) {
+        apv_imgb_cpy(apvctx->ifrms.frm[FRM_IDX].imgb, apvctx->imgb_i, avctx);
+    }
+
+    apvctx->ifrms.frm[FRM_IDX].imgb->ts[0] = frame->pts;
+
+    apvctx->ifrms.frm[FRM_IDX].group_id = 1; // FIX-ME : need to set properly in case of multi-frame
+    apvctx->ifrms.frm[FRM_IDX].pbu_type = OAPV_PBU_TYPE_PRIMARY_FRAME;
+    
     // @todo Find out more on the last param, on how can we use it - reconstructed image
     //
-    ret = apve_encode(apvctx->id, imgb_inp, &(apvctx->bitb), &(apvctx->stat), NULL);
-    if (APV_FAILED(ret)) {
-        av_log(avctx, AV_LOG_ERROR, "xeve_push() failed\n");
+    ret = oapve_encode(apvctx->id, &apvctx->ifrms, apvctx->mid, &(apvctx->bitb), &(apvctx->stat), NULL);
+    if (OAPV_FAILED(ret)) {
+        av_log(avctx, AV_LOG_ERROR, "oapve_encode() failed\n");
         return AVERROR_EXTERNAL;
     }
 
-    if(apvctx->stat.write > 0) {
-        ret = ff_get_encode_buffer(avctx, avpkt, apvctx->stat.write, 0);
-        if (ret < 0)
-            return ret;
+    /* store bitstream */
+    if(OAPV_SUCCEEDED(ret)) {
+        if(apvctx->stat.write > 0) {
+            ret = ff_get_encode_buffer(avctx, avpkt, apvctx->stat.write, 0);
+            if (ret < 0)
+                return ret;
 
-        memcpy(avpkt->data, apvctx->bitb.addr, apvctx->stat.write);
+            memcpy(avpkt->data, apvctx->bitb.addr, apvctx->stat.write);
 
-        avpkt->time_base.num = 1;
-        avpkt->time_base.den = apvctx->cdsc.param.fps;
+            avpkt->time_base.num = apvctx->cdsc.param->fps_num;
+            avpkt->time_base.den = apvctx->cdsc.param->fps_den;
 
-        avpkt->pts = avpkt->dts = frame->pts;  // @todo provide implementation in APV apvctx->bitb.ts[0];
-        avpkt->flags |= AV_PKT_FLAG_KEY;
+            avpkt->pts = avpkt->dts = frame->pts;  // @todo provide implementation in APV apvctx->bitb.ts[0];
+            avpkt->flags |= AV_PKT_FLAG_KEY;
 
-        ff_side_data_set_encoder_stats(avpkt, apvctx->stat.qp * FF_QP2LAMBDA, NULL, 0, AV_PICTURE_TYPE_I);
+            ff_side_data_set_encoder_stats(avpkt, apvctx->qp * FF_QP2LAMBDA, NULL, 0, AV_PICTURE_TYPE_I);
 
-        *got_packet = 1;
-    } else {
-        *got_packet = 0;
-    }
-
+            *got_packet = 1;
+        } else {
+            *got_packet = 0;
+        }
+    } 
+    
     return 0;
 }
 
@@ -419,13 +827,28 @@ static av_cold int libapve_close(AVCodecContext *avctx)
     ApvEncContext *apvctx = avctx->priv_data;
     (void)apvctx;
 
+    if(apvctx->imgb_r != NULL)
+        apvctx->imgb_r->release(apvctx->imgb_r);
+
+    for(int i = 0; i < apvctx->num_frames; i++) {
+        if(apvctx->ifrms.frm[i].imgb != NULL) {
+            apvctx->ifrms.frm[i].imgb->release(apvctx->ifrms.frm[i].imgb);
+        }
+    }
+    
+    oapvm_rem_all(apvctx->mid);
+
     if (apvctx->id) {
-        apve_delete(apvctx->id);
+        oapve_delete(apvctx->id);
         apvctx->id = NULL;
     }
 
-    av_free(apvctx->bitb.addr); /* release bitstream buffer */
+    if (apvctx->mid) {
+        oapvm_delete(apvctx->mid);
+        apvctx->mid = NULL;
+    }
 
+    av_free(apvctx->bitb.addr); /* release bitstream buffer */
 
     return 0;
 }
@@ -460,11 +883,10 @@ static const AVOption libapve_options[] = {
 
     { "qp-cr-offset", "cr qp offset", OFFSET(qp_cr_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
-    { "rc_type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = APV_RC_CQP }, APV_RC_CQP,  APV_RC_CRF, VE, "rc_type" },
-    { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = APV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
-    { "ABR", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = APV_RC_ABR }, INT_MIN, INT_MAX, VE, "rc_type" },
-    { "CRF", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = APV_RC_CRF }, INT_MIN, INT_MAX, VE, "rc_type" },
-
+    { "rc_type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_CQP }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
+    { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
+    { "ABR", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_ABR }, INT_MIN, INT_MAX, VE, "rc_type" },
+    
     { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
     { "crf", "Constant rate factor value for CRF rate control mode", OFFSET(crf), AV_OPT_TYPE_INT, { .i64 = 32 }, 10, 49, VE },
 
