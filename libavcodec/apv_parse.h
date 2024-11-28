@@ -47,6 +47,35 @@ static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_si
     return frame_data_size;
 }
 
+// @see 10.2. Raw bitstream format [draft-lim-apv-02.html]
+static inline uint32_t apv_read_au_size(const uint8_t *bits, int bits_size, void *logctx)
+{
+    uint32_t au_size = 0;
+
+    if (bits_size < APV_AU_SIZE_PREFIX_LENGTH) {
+        av_log(logctx, AV_LOG_ERROR, "Can't read Access Unit size\n");
+        return 0;
+    }
+
+    au_size = AV_RB32(bits);
+
+    return au_size;
+}
+
+static inline uint32_t apv_read_pbu_size(const uint8_t *bits, int bits_size, void *logctx)
+{
+    uint32_t pbu_size = 0;
+
+    if (bits_size < APV_PBU_SIZE_PREFIX_LENGTH) {
+        av_log(logctx, AV_LOG_ERROR, "Can't read PBU (primitive bitstream unit) size\n");
+        return 0;
+    }
+
+    pbu_size = AV_RB32(bits);
+
+    return pbu_size;
+}
+
 // @see WD1_APV_spec section 7.3.1 Frame Data syntax
 int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd);
 

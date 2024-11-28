@@ -103,14 +103,7 @@ static int apv_extract_header_info(APVHeaderInfo *info,
     default:
         return AVERROR_INVALIDDATA;
     }
-    else {
-      fdh->color_primaries          = 2;
-      fdh->transfer_characteristics = 2;
-      fdh->matrix_coefficients      = 2;
-    }
-
-    fdh->use_q_matrix                   = get_bits(gb, 1);
-
+    
     // Ignore capture_time_distance.
     bytestream2_skip(gbc, 1);
 
