@@ -1891,7 +1891,7 @@ ffmpeg -i input -c:v libaom-av1 -b:v 500K -aom-params tune=psnr:enable-tpl-model
 
 @section libapv
 
-Advanced Professional Video codec encoder and decoder wrappers.
+Advanced Professional Video codec encoder wrapper.
 
 This encoder requires the presence of the libapv headers and library
 during configuration. You need to explicitly configure the build with
