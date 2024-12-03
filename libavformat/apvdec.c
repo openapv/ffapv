@@ -1,7 +1,7 @@
 /*
  * RAW APV video demuxer
  *
- * Copyright (c) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2024 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -34,17 +34,14 @@
 #include "avio_internal.h"
 #include "internal.h"
 
-
 #define RAW_PACKET_SIZE 1024
 #define APV_FRAME_DATA_HEADER_SIZE 24
 
 typedef struct APVParserContext {
     int got_frame_data;
+
     APVPBUHeader pbu_header;
     APVFrameInfo frame_info;
-
-    // deprecated
-    APVFrameDataHeader frame_data_header;
 } APVParserContext;
 
 typedef struct APVDemuxContext {
@@ -73,117 +70,9 @@ static const AVClass apv_demuxer_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-#if 0
-// @deprecated
-static int apv_parse_frame_data_header(GetBitContext *gb, APVFrameDataHeader *fdh)
-{
-    fdh->frame_header_size              = get_bits(gb, 16);
-    fdh->profile_idc                    = get_bits(gb, 8);
-    fdh->level_idc                      = get_bits(gb, 8);
-    fdh->reserved_zero_8bits            = get_bits(gb, 8);
-    fdh->frame_width_minus1             = get_bits(gb, 32);
-    fdh->frame_height_minus1            = get_bits(gb, 32);
-
-    // @todo documentation inconsistency with the reference implementation.
-    //
-    // The reference application uses 4 bits for chroma_format_idc
-    // while the documentation says that chroma_format_idc takes up 2 bits in the header
-    fdh->chroma_format_idc              = get_bits(gb, 4);
-
-    fdh->bit_depth_minus8               = get_bits(gb, 4);
-    fdh->capture_time_distance          = get_bits(gb, 8);
-    fdh->reserved_zero_16bits           = get_bits(gb, 16);
-    fdh->color_description_present_flag = get_bits(gb, 1);
-    if(fdh->color_description_present_flag) {
-        fdh->color_primaries            = get_bits(gb, 8);
-        fdh->transfer_characteristics   = get_bits(gb, 8);
-        fdh->matrix_coefficients        = get_bits(gb, 8);
-    }
-    else {
-      fdh->color_primaries          = 2;
-      fdh->transfer_characteristics = 2;
-      fdh->matrix_coefficients      = 2;
-    }
-
-    fdh->use_q_matrix                   = get_bits(gb, 1);
-
-    return 0;
-}
-#endif
-
-#if 0
-static int apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *finfo)
-{
-    finfo->profile_idc                    = get_bits(gb, 8);
-    finfo->level_idc                      = get_bits(gb, 8);
-    finfo->band_idc                       = get_bits(gb, 3);
-    finfo->reserved_zero_5bits            = get_bits(gb, 5);
-    finfo->frame_width_minus1             = get_bits(gb, 32);
-    finfo->frame_height_minus1            = get_bits(gb, 32);
-    finfo->chroma_format_idc              = get_bits(gb, 4);
-    finfo->bit_depth_minus8               = get_bits(gb, 4);
-    finfo->capture_time_distance          = get_bits(gb, 8);
-    finfo->reserved_zero_8bits            = get_bits(gb, 8);
-    
-    return 0;
-}
-#endif
-
-// static int apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
-// {
-//     pbuh->pbu_type                      = get_bits(gb, 8);
-//     pbuh->group_id                      = get_bits(gb, 16);
-//     pbuh->reserved_zer_8bits            = get_bits(gb, 8);
-        
-//     return 0;
-// }
-#if 0
-static int apv_annexb_probe(const AVProbeData *p)
-{
-    APVParserContext ev = {0};
-
-    size_t frame_data_header_size;
-    GetBitContext gb;
-
-    unsigned char *bs = (unsigned char *)p->buf;
-    int bs_size = p->buf_size;
-    int ret = 0;
-
-    if (bs_size < APV_FRAME_DATA_SIZE_PREFIX_LENGTH + APV_FRAME_DATA_HEADER_SIZE)
-        return 0;
-
-    ret = init_get_bits8(&gb, bs, bs_size);
-    if (ret < 0)
-        return 0;
-
-    // skip a four-byte length Frame Data Size syntax element, which indicates the size of the Frame Data in bytes
-    skip_bits_long(&gb, 32);
-
-    // read frame data header size in bytes
-    frame_data_header_size  = show_bits(&gb, 16);
-
-    if(bs_size < APV_FRAME_DATA_SIZE_PREFIX_LENGTH + frame_data_header_size)
-        return 0;
-
-    apv_parse_frame_data_header(&gb, &ev.frame_data_header);
-
-    if( ev.frame_data_header.profile_idc == 33 && // @see Annex A - A.3.2 Profiles (Baseline profile)
-        ev.frame_data_header.chroma_format_idc == 2 &&
-        ev.frame_data_header.bit_depth_minus8 >= 2 && ev.frame_data_header.bit_depth_minus8 <= 4 &&
-        ev.frame_data_header.reserved_zero_16bits == 0 )
-        ev.got_frame_data = 1;
-
-    if (ev.got_frame_data) {
-        return AVPROBE_SCORE_EXTENSION + 1;  // 1 more than .mpg
-    }
-
-    return 0;
-}
-#endif
-
 // The implementation of the probe function is in accordance with the documentation provided in draft-lim-apv-02 version 02. 
 // https://datatracker.ietf.org/doc/html/draft-lim-apv-02
-static int apv_annexb_probe2(const AVProbeData *p)
+static int apv_annexb_probe(const AVProbeData *p)
 {
     APVParserContext ev = {0};
 
@@ -207,19 +96,7 @@ static int apv_annexb_probe2(const AVProbeData *p)
     // skip a four-byte length PBU Size syntax element, which indicates the size of the PBU in bytes
     skip_bits_long(&gb, 32);
 
-    // read frame data header size in bytes
-    // frame_data_header_size  = show_bits(&gb, 16);
-
-    // if(bs_size < APV_FRAME_DATA_SIZE_PREFIX_LENGTH + frame_data_header_size)
-    //     return 0;
-
-    //apv_parse_frame_data_header(&gb, &ev.frame_data_header);
     ff_apv_parse_pbu_header(&gb, &ev.pbu_header);
-    
-    // if((1 <= ev.pbu_header.pbu_type && ev.pbu_header.pbu_type <=2) ||
-    //    (25 <= ev.pbu_header.pbu_type && ev.pbu_header.pbu_type <= 27) && ev.pbu_header.reserved_zer_8bits == 0) {
-    //     return AVPROBE_SCORE_EXTENSION + 1;  // 1 more than .mpg
-    // }
     
     if( ev.pbu_header.pbu_type == 1  ||
         ev.pbu_header.pbu_type == 2  ||
@@ -294,12 +171,6 @@ static int apv_annexb_probe2(const AVProbeData *p)
         }
     }
     
-    // if( ev.frame_data_header.profile_idc == 33 && // @see Annex A - A.3.2 Profiles (Baseline profile)
-    //     ev.frame_data_header.chroma_format_idc == 2 &&
-    //     ev.frame_data_header.bit_depth_minus8 >= 2 && ev.frame_data_header.bit_depth_minus8 <= 4 &&
-    //     ev.frame_data_header.reserved_zero_16bits == 0 )
-    //     ev.got_frame_data = 1;
-
     if (ev.got_frame_data && 
         ev.pbu_header.reserved_zer_8bits == 0 && 
         ev.frame_info.reserved_zero_5bits == 0 &&
@@ -309,69 +180,8 @@ static int apv_annexb_probe2(const AVProbeData *p)
 
     return 0;
 }
-#if 0
+
 static int apv_read_header(AVFormatContext *s)
-{
-    AVStream *st;
-    FFStream *sti;
-
-    APVDemuxContext *c = s->priv_data;
-    APVFrameDataHeader frame_data_header;
-    GetBitContext gb;
-    int ret;
-    int frame_data_header_size;
-
-    int eof = avio_feof (s->pb);
-    if(eof) {
-        return AVERROR_EOF;
-    }
-
-    st = avformat_new_stream(s, NULL);
-    if (!st)
-        return AVERROR(ENOMEM);
-
-    sti = ffstream(st);
-
-    ret = init_get_bits8(&gb, s->pb->buffer, s->pb->buffer_size);
-    if (ret < 0)
-        return 0;
-
-    skip_bits_long(&gb, 32); // frame data length
-
-    // read frame data header size in bytes
-    frame_data_header_size  = show_bits(&gb, 16);
-
-    if(s->pb->buffer_size < APV_FRAME_DATA_SIZE_PREFIX_LENGTH + frame_data_header_size)
-        return 0;
-
-    apv_parse_frame_data_header(&gb,  &frame_data_header);
-
-    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
-    st->codecpar->codec_id = AV_CODEC_ID_APV;
-    st->codecpar->width = frame_data_header.frame_width_minus1+1;
-    st->codecpar->height = frame_data_header.frame_height_minus1+1;
-
-    if(frame_data_header.chroma_format_idc == 2 && frame_data_header.bit_depth_minus8 == 2) {
-        st->codecpar->format = AV_PIX_FMT_YUV422P10;
-    } else if(frame_data_header.chroma_format_idc == 3 && frame_data_header.bit_depth_minus8 == 2) {
-        st->codecpar->format = AV_PIX_FMT_YUV444P10;
-    } else {
-        st->codecpar->format = AV_PIX_FMT_NONE;
-    }
-
-    // This causes sending to the parser full frames, not chunks of data
-    // The flag PARSER_FLAG_COMPLETE_FRAMES will be set in demux.c (demux.c: 1316)
-    sti->need_parsing = AVSTREAM_PARSE_HEADERS;
-
-    st->avg_frame_rate = c->framerate;
-
-    // taken from rawvideo demuxers
-    avpriv_set_pts_info(st, 64, 1, 1200000);
-
-    return 0;
-}
-#endif
-static int apv_read_header2(AVFormatContext *s)
 {
     AVStream *st;
     FFStream *sti;
@@ -538,7 +348,7 @@ static int apv_read_header2(AVFormatContext *s)
 
     // This causes sending to the parser full frames, not chunks of data
     // The flag PARSER_FLAG_COMPLETE_FRAMES will be set in demux.c (demux.c: 1316)
-    sti->need_parsing = AVSTREAM_PARSE_HEADERS; // AVSTREAM_PARSE_NONE;//
+    sti->need_parsing = AVSTREAM_PARSE_HEADERS;
 
     st->avg_frame_rate = c->framerate;
 
@@ -551,49 +361,7 @@ static int apv_read_header2(AVFormatContext *s)
 static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     int ret;
-    uint32_t frame_data_size;
-    uint8_t buf[APV_FRAME_DATA_SIZE_PREFIX_LENGTH];
-
-    int eof = avio_feof (s->pb);
-    if(eof) {
-        return AVERROR_EOF;
-    }
-
-    ret = ffio_ensure_seekback(s->pb, APV_FRAME_DATA_SIZE_PREFIX_LENGTH);
-    if (ret < 0)
-        return ret;
-
-    ret = avio_read(s->pb, buf, APV_FRAME_DATA_SIZE_PREFIX_LENGTH);
-    if (ret < 0) {
-        return ret;
-    }
-    if (ret != APV_FRAME_DATA_SIZE_PREFIX_LENGTH)
-        return AVERROR_INVALIDDATA;
-
-
-    frame_data_size = apv_read_frame_data_size(buf, APV_FRAME_DATA_SIZE_PREFIX_LENGTH, s);
-    if (!frame_data_size || frame_data_size > INT_MAX)
-            return AVERROR_INVALIDDATA;
-
-
-    avio_seek(s->pb, -APV_FRAME_DATA_SIZE_PREFIX_LENGTH, SEEK_CUR);
-
-    // put the FrameData into pkt
-    ret = av_get_packet(s->pb, pkt, frame_data_size + APV_FRAME_DATA_SIZE_PREFIX_LENGTH);
-    if (ret < 0)
-        return ret;
-
-    if (ret != (frame_data_size + APV_FRAME_DATA_SIZE_PREFIX_LENGTH))
-        return AVERROR_INVALIDDATA;
-
-    return ret;
-}
-
-static int apv_read_packet2(AVFormatContext *s, AVPacket *pkt)
-{
-    int ret;
     uint32_t au_size;
-    //uint32_t pbu_size;
     uint8_t buf[APV_AU_SIZE_PREFIX_LENGTH];
 
     int eof = avio_feof (s->pb);
@@ -616,14 +384,6 @@ static int apv_read_packet2(AVFormatContext *s, AVPacket *pkt)
     if (!au_size || au_size > INT_MAX)
             return AVERROR_INVALIDDATA;
 
-    
-    //////////////////////////
-
-
-    /////////////////////////
-    // avio_seek(s->pb, -APV_FRAME_DATA_SIZE_PREFIX_LENGTH, SEEK_CUR);
-
-    // put the FrameData into pkt
     ret = av_get_packet(s->pb, pkt, au_size);
     if (ret < 0)
         return ret;
@@ -643,16 +403,21 @@ static int apv_read_close(AVFormatContext *s)
     return 0;
 }
 
+static const AVCodecTag apv_tags[] = {
+    { AV_CODEC_ID_APV,  MKTAG('a','p','v','1') },
+    { AV_CODEC_ID_NONE, 0 },
+};
+
 const FFInputFormat ff_apv_demuxer = {
-    .p.name           = "apv",
-    .p.long_name      = NULL_IF_CONFIG_SMALL("APV Annex B"),
-    .p.extensions     = "apv",
+    .p.name         = "apv",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("APV Annex B"),
+    .p.extensions   = "apv",
     .p.flags        = AVFMT_GENERIC_INDEX,
     .p.priv_class   = &apv_demuxer_class,
-    .p.codec_tag = MKTAG('a','p','v','1'), 
-    .read_probe     = apv_annexb_probe2,
-    .read_header    = apv_read_header2, // annexb_read_header
-    .read_packet    = apv_read_packet2, // annexb_read_packet
+    .p.codec_tag    = (const AVCodecTag* const []){apv_tags, 0},
+    .read_probe     = apv_annexb_probe,
+    .read_header    = apv_read_header, // annexb_read_header
+    .read_packet    = apv_read_packet, // annexb_read_packet
     .read_close     = apv_read_close,
     .flags_internal = FF_INFMT_FLAG_INIT_CLEANUP,
     .raw_codec_id   = AV_CODEC_ID_APV,

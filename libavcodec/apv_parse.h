@@ -32,7 +32,8 @@
 #include "apv.h"
 #include "apv_ps.h"
 
-// @see APV Technical Note section 2.3 APV Bitstream structure
+// @deprecated
+// @todo reimplemntation is needed
 static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_size, void *logctx)
 {
     uint32_t frame_data_size = 0;
@@ -76,6 +77,8 @@ static inline uint32_t apv_read_pbu_size(const uint8_t *bits, int bits_size, voi
     return pbu_size;
 }
 
+// @deprecated
+// @todo reimplemntation is needed
 // @see WD1_APV_spec section 7.3.1 Frame Data syntax
 int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd);
 

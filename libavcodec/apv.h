@@ -65,7 +65,8 @@ enum {
     APV_COLOR_COMP_Y    = 0,    /* Y luma */
     APV_COLOR_COMP_U    = 1,    /* Cb Chroma */
     APV_COLOR_COMP_V    = 2,    /* Cr Chroma */
-    APV_COLOR_COMP_NUM  = 3     /* number of color component */
+    APV_COLOR_COMP_A    = 3,    /* Alpha */
+    APV_COLOR_COMP_NUM  = 4     /* number of color component */
 };
 
 #endif // AVCODEC_APV_H

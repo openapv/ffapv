@@ -402,7 +402,8 @@ int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
 
     apvc_init(&apvc);
 
-    // Todo change to if
+    // @deprecated
+    // @todo reimplemntation is needed
     if (bytes_to_read > APV_FRAME_DATA_SIZE_PREFIX_LENGTH) {
         frame_data_size = apv_read_frame_data_size(data, APV_FRAME_DATA_SIZE_PREFIX_LENGTH);
         if (frame_data_size == 0) goto end;

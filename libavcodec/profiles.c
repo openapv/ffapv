@@ -203,9 +203,4 @@ const AVProfile ff_evc_profiles[] = {
     { AV_PROFILE_UNKNOWN },
 };
 
-const AVProfile ff_apv_profiles[] = {
-    { AV_PROFILE_APV_BASELINE,             "Baseline"              },
-    { AV_PROFILE_UNKNOWN },
-};
-
 #endif /* !CONFIG_SMALL */
