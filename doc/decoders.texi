@@ -421,7 +421,7 @@ The apv-equivalent options or values are listed in parentheses for easy migratio
 
 @float NOTE
 To get a more accurate and extensive documentation of the libapv options,
-invoke the command  @code{apv_app_dec --help} or consult the libxapv documentation.
+invoke the command  @code{apv_app_dec --help} or consult the libapv documentation.
 @end float
 
 @table @option
