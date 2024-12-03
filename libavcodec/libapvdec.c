@@ -244,7 +244,7 @@ static int libapvd_imgb_release(oapv_imgb_t * imgb)
     return refcnt;
 }
 
-static void libapvd_libapvd_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
+static void libapvd_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
 {
     int            i, j;
     unsigned char *s, *d;
@@ -262,7 +262,7 @@ static void libapvd_libapvd_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
     }
 }
 
-static void libapvd_libapvd_libapvd_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void libapvd_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int            i, j, k;
 
@@ -283,7 +283,7 @@ static void libapvd_libapvd_libapvd_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oap
     }
 }
 
-static void libapvd_libapvd_libapvd_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void libapvd_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int            i, j, k, t0, add;
 
@@ -310,7 +310,7 @@ static void libapvd_libapvd_libapvd_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oa
     }
 }
 
-static void libapvd_libapvd_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void libapvd_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int             i, j, k;
 
@@ -331,7 +331,7 @@ static void libapvd_libapvd_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *s
     }
 }
 
-static void libapvd_libapvd_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void libapvd_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int             i, j, k, t0, add;
 
@@ -370,19 +370,19 @@ static void libapvd_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, struct AVCodecC
     bd_dst = OAPV_CS_GET_BIT_DEPTH(dst->cs);
 
     if(src->cs == dst->cs) {
-        libapvd_libapvd_imgb_cpy_plane(dst, src);
+        libapvd_imgb_cpy_plane(dst, src);
     }
     else if(bd_src == 8 && bd_dst > 8) {
-        libapvd_libapvd_libapvd_imgb_cpy_shift_left_8b(dst, src, bd_dst - bd_src);
+        libapvd_imgb_cpy_shift_left_8b(dst, src, bd_dst - bd_src);
     }
     else if(bd_src > 8 && bd_dst == 8) {
-        libapvd_libapvd_libapvd_imgb_cpy_shift_right_8b(dst, src, bd_src - bd_dst);
+        libapvd_imgb_cpy_shift_right_8b(dst, src, bd_src - bd_dst);
     }
     else if(bd_src < bd_dst) {
-        libapvd_libapvd_imgb_cpy_shift_left(dst, src, bd_dst - bd_src);
+        libapvd_imgb_cpy_shift_left(dst, src, bd_dst - bd_src);
     }
     else if(bd_src > bd_dst) {
-        libapvd_libapvd_imgb_cpy_shift_right(dst, src, bd_src - bd_dst);
+        libapvd_imgb_cpy_shift_right(dst, src, bd_src - bd_dst);
     }
     else {
         av_log(avctx, AV_LOG_ERROR, "ERROR: unsupported image copy\n");
@@ -662,7 +662,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             free(pld);
     }
 
-    // Write decoded frames into AVFrame objects
+    // @todo Write decoded frames into AVFrame objects
     // @notice The current implementation supports only 1 frame per access unit
     // 
     for(int i = 0; i < ofrms.num_frms; i++) {
@@ -687,7 +687,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 imgb_o = frm->imgb;
             }
 
-            // Copy decoded image into AVFrame object
+            // @todo Copy decoded image into AVFrame object
             // 
             // @notice  The current implementation of the openAPV codec does not allow adding multiple frames to a single Access Unit.
             //          However, the final implementation of the codec is expected to support Access Units containing multiple frames.
@@ -785,7 +785,7 @@ static av_cold int libapvd_close(AVCodecContext *avctx)
 #define OFFSET(x) offsetof(ApvDecContext, x)
 #define VD AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
 
-// Consider using following options (./ffmpeg --help encoder=libxeve)
+// Consider using following options (./ffmpeg --help encoder=libapv)
 //
 static const AVOption libapvd_options[] = {
     { "output_csp", "Color space", OFFSET(output_csp),AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VD },
@@ -811,7 +811,6 @@ const FFCodec ff_libapv_decoder = {
     .priv_data_size     = sizeof(ApvDecContext),
     .p.priv_class       = &libapvd_class,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_AVOID_PROBING,
-    .p.profiles         = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
     .p.wrapper_name     = "libapvd",
     .caps_internal      = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_NOT_INIT_THREADSAFE | FF_CODEC_CAP_SETS_PKT_DTS | FF_CODEC_CAP_SETS_FRAME_PROPS
 };
