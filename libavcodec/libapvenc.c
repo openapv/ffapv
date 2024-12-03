@@ -768,7 +768,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
     }
 
     for (int i = 0; i < apvctx->imgb_i->np; i++) {
-        // FIX-ME : need to set properly in case of multi-frame
+        // @todo FIX-ME : need to set properly in case of multi-frame
         apvctx->imgb_i->a[i] = frame->data[i];
         apvctx->imgb_i->s[i] = frame->linesize[i];
     }
@@ -779,7 +779,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
     apvctx->ifrms.frm[FRM_IDX].imgb->ts[0] = frame->pts;
 
-    apvctx->ifrms.frm[FRM_IDX].group_id = 1; // FIX-ME : need to set properly in case of multi-frame
+    apvctx->ifrms.frm[FRM_IDX].group_id = 1; // @todo FIX-ME : need to set properly in case of multi-frame
     apvctx->ifrms.frm[FRM_IDX].pbu_type = OAPV_PBU_TYPE_PRIMARY_FRAME;
     
     // @todo Find out more on the last param, on how can we use it - reconstructed image
@@ -925,7 +925,6 @@ const FFCodec ff_libapv_encoder = {
     .p.priv_class       = &libapve_class,
     .defaults           = libapve_defaults,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_DR1,
-    .p.profiles         = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
     .p.wrapper_name     = "libapve",
     .p.pix_fmts         = supported_pixel_formats,
     .caps_internal      = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_NOT_INIT_THREADSAFE,
