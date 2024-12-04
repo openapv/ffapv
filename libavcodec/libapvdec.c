@@ -40,13 +40,7 @@
 #include "profiles.h"
 #include "decode.h"
 #include "apv.h"
-
-/* assert function */
-#include <assert.h>
-#define assert_rv(x,r) {if(!(x)){assert(x); return (r);}}
-
-#define LIBOAPV_CLIP_VAL(n, min, max) (((n) > (max)) ? (max) : (((n) < (min)) ? (min) : (n)))
-#define LIBOAPV_ALIGN_VAL(val, align) ((((val) + (align) - 1) / (align)) * (align))
+#include "apv_imgb.h"
 
 /**
  * The structure stores all the states associated with the instance of APV decoder
@@ -178,6 +172,7 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
     return 0;
 }
 
+#if 0
 /* Function for atomic increament:
    This function might need to modify according to O/S or CPU platform
 */
@@ -218,19 +213,19 @@ static void libapvd_picbuf_free(void* p)
     if (p) {free(p);}
 }
 
-static int libapvd_imgb_addref(oapv_imgb_t * imgb)
+static int apv_imgb_addref(oapv_imgb_t * imgb)
 {
     assert_rv(imgb, OAPV_ERR_INVALID_ARGUMENT);
     return libapvd_atomic_inc(&imgb->refcnt);
 }
 
-static int libapvd_imgb_getref(oapv_imgb_t * imgb)
+static int apv_imgb_getref(oapv_imgb_t * imgb)
 {
     assert_rv(imgb, OAPV_ERR_INVALID_ARGUMENT);
     return imgb->refcnt;
 }
 
-static int libapvd_imgb_release(oapv_imgb_t * imgb)
+static int apv_imgb_release(oapv_imgb_t * imgb)
 {
     int refcnt, i;
     assert_rv(imgb, OAPV_ERR_INVALID_ARGUMENT);
@@ -244,7 +239,7 @@ static int libapvd_imgb_release(oapv_imgb_t * imgb)
     return refcnt;
 }
 
-static void libapvd_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
+static void apv_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
 {
     int            i, j;
     unsigned char *s, *d;
@@ -262,7 +257,7 @@ static void libapvd_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
     }
 }
 
-static void libapvd_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void apv_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int            i, j, k;
 
@@ -283,7 +278,7 @@ static void libapvd_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, i
     }
 }
 
-static void libapvd_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void apv_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int            i, j, k, t0, add;
 
@@ -310,7 +305,7 @@ static void libapvd_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, 
     }
 }
 
-static void libapvd_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void apv_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int             i, j, k;
 
@@ -331,7 +326,7 @@ static void libapvd_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int 
     }
 }
 
-static void libapvd_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
+static void apv_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
 {
     int             i, j, k, t0, add;
 
@@ -363,26 +358,26 @@ static void libapvd_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int
     }
 }
 
-static void libapvd_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, struct AVCodecContext *avctx)
+static void apv_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, struct AVCodecContext *avctx)
 {
     int i, bd_src, bd_dst;
     bd_src = OAPV_CS_GET_BIT_DEPTH(src->cs);
     bd_dst = OAPV_CS_GET_BIT_DEPTH(dst->cs);
 
     if(src->cs == dst->cs) {
-        libapvd_imgb_cpy_plane(dst, src);
+        apv_imgb_cpy_plane(dst, src);
     }
     else if(bd_src == 8 && bd_dst > 8) {
-        libapvd_imgb_cpy_shift_left_8b(dst, src, bd_dst - bd_src);
+        apv_imgb_cpy_shift_left_8b(dst, src, bd_dst - bd_src);
     }
     else if(bd_src > 8 && bd_dst == 8) {
-        libapvd_imgb_cpy_shift_right_8b(dst, src, bd_src - bd_dst);
+        apv_imgb_cpy_shift_right_8b(dst, src, bd_src - bd_dst);
     }
     else if(bd_src < bd_dst) {
-        libapvd_imgb_cpy_shift_left(dst, src, bd_dst - bd_src);
+        apv_imgb_cpy_shift_left(dst, src, bd_dst - bd_src);
     }
     else if(bd_src > bd_dst) {
-        libapvd_imgb_cpy_shift_right(dst, src, bd_src - bd_dst);
+        apv_imgb_cpy_shift_right(dst, src, bd_src - bd_dst);
     }
     else {
         av_log(avctx, AV_LOG_ERROR, "ERROR: unsupported image copy\n");
@@ -397,7 +392,7 @@ static void libapvd_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, struct AVCodecC
     }
 }
 
-static oapv_imgb_t * libapvd_imgb_create(int w, int h, int cs, struct AVCodecContext *avctx)
+static oapv_imgb_t * apv_imgb_create(int w, int h, int cs, struct AVCodecContext *avctx)
 {
     int i, bd;
     oapv_imgb_t * imgb;
@@ -461,9 +456,9 @@ static oapv_imgb_t * libapvd_imgb_create(int w, int h, int cs, struct AVCodecCon
         memset(imgb->a[i], 0, imgb->bsize[i]);
     }
     imgb->cs = cs;
-    imgb->addref = libapvd_imgb_addref;
-    imgb->getref = libapvd_imgb_getref;
-    imgb->release = libapvd_imgb_release;
+    imgb->addref = apv_imgb_addref;
+    imgb->getref = apv_imgb_getref;
+    imgb->release = apv_imgb_release;
 
     imgb->addref(imgb); /* increase reference count */
     return imgb;
@@ -480,7 +475,7 @@ ERR:
     }
     return NULL;
 }
-
+#endif
 /**
  * Initialize decoder
  * Create a decoder instance and allocate all the needed resources
@@ -599,9 +594,9 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
 
         if(frm->imgb == NULL) {
             if(apvctx->output_csp == 1) {
-                frm->imgb = libapvd_imgb_create(finfo->w, finfo->h, OAPV_CS_SET(OAPV_CF_PLANAR2, 10, 0), avctx);
+                frm->imgb = apv_imgb_create(finfo->w, finfo->h, OAPV_CS_SET(OAPV_CF_PLANAR2, 10, 0), avctx);
             } else {
-                frm->imgb = libapvd_imgb_create(finfo->w, finfo->h, finfo->cs, avctx);
+                frm->imgb = apv_imgb_create(finfo->w, finfo->h, finfo->cs, avctx);
             }
 
             if(frm->imgb == NULL) {
@@ -670,7 +665,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         if(ofrms.num_frms > 0) {
             if(OAPV_CS_GET_BIT_DEPTH(frm->imgb->cs) != apvctx->output_depth) {
                 if(imgb_w == NULL) {
-                    imgb_w = libapvd_imgb_create(frm->imgb->w[0], frm->imgb->h[0],
+                    imgb_w = apv_imgb_create(frm->imgb->w[0], frm->imgb->h[0],
                                             OAPV_CS_SET(OAPV_CS_GET_FORMAT(frm->imgb->cs), apvctx->output_depth, 0), avctx);
                     if(imgb_w == NULL) {
                         av_log(avctx, AV_LOG_ERROR,"cannot allocate image buffer (w:%d, h:%d, cs:%d)\n",
@@ -680,7 +675,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                         goto end;
                     }
                 }
-                libapvd_imgb_cpy(imgb_w, frm->imgb, avctx);
+                apv_imgb_cpy(imgb_w, frm->imgb, avctx);
                 imgb_o = imgb_w;
             }
             else {
