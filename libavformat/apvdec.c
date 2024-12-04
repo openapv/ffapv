@@ -76,7 +76,6 @@ static int apv_annexb_probe(const AVProbeData *p)
 {
     APVParserContext ev = {0};
 
-    // size_t frame_data_header_size;
     GetBitContext gb;
 
     unsigned char *bs = (unsigned char *)p->buf;

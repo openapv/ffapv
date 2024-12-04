@@ -77,9 +77,7 @@ static inline uint32_t apv_read_pbu_size(const uint8_t *bits, int bits_size, voi
     return pbu_size;
 }
 
-// @deprecated
-// @todo reimplemntation is needed
-// @see WD1_APV_spec section 7.3.1 Frame Data syntax
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame
 int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd);
 
 #endif /* AVCODEC_APV_PARSE_H */
