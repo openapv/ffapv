@@ -214,38 +214,24 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     uint32_t au_size, signature;
     int ret;
-    uint32_t au_size;
-    uint8_t buf[APV_AU_SIZE_PREFIX_LENGTH];
-
-    int eof = avio_feof (s->pb);
-    if(eof) {
+     
+    au_size = avio_rb32(s->pb);
+    if (au_size == 0 && avio_feof(s->pb))
         return AVERROR_EOF;
-    }
-
-    ret = ffio_ensure_seekback(s->pb, APV_AU_SIZE_PREFIX_LENGTH);
-    if (ret < 0)
-        return ret;
-
-    ret = avio_read(s->pb, buf, APV_AU_SIZE_PREFIX_LENGTH);
-    if (ret < 0) {
-        return ret;
-    }
-    if (ret != APV_AU_SIZE_PREFIX_LENGTH)
+    if (au_size < 24 || au_size > 1 << 24) {
+        av_log(s, AV_LOG_ERROR,
+               "APV AU has invalid size: %"PRIu32"\n", au_size);
         return AVERROR_INVALIDDATA;
-
-    au_size = apv_read_au_size(buf, APV_AU_SIZE_PREFIX_LENGTH, s);
-    if (!au_size || au_size > INT_MAX)
-            return AVERROR_INVALIDDATA;
-
+    }
+     
     ret = av_get_packet(s->pb, pkt, au_size);
     pkt->flags        = AV_PKT_FLAG_KEY;
-
+    
     signature = AV_RB32(pkt->data);
     if (signature != APV_SIGNATURE) {
         av_log(s, AV_LOG_ERROR, "APV AU has invalid signature.\n");
         return AVERROR_INVALIDDATA;
     }
-
     return ret;
 }
 

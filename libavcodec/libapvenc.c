@@ -710,31 +710,6 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         }
         apvctx->ifrms.num_frms++;
     }
-    
-#if 0
-    // Chroma subsampling
-    //
-    // YUV format explanation
-    // shift_h == 1 && shift_v == 1 : YUV420
-    // shift_h == 1 && shift_v == 0 : YUV422
-    // shift_h == 0 && shift_v == 0 : YUV444
-    //
-    width_chroma = AV_CEIL_RSHIFT(avctx->width, shift_h);
-    height_chroma = AV_CEIL_RSHIFT(avctx->height, shift_v);
-
-    /* set default values for input image buffer */
-    imgb_inp = &apvctx->imgb_inp;
-    imgb_inp->cs = libapve_apv_color_space(avctx->pix_fmt);
-    imgb_inp->np = 3; /* only for yuv420p, yuv420ple */
-
-    for (i = 0; i < imgb_inp->np; i++)
-        imgb_inp->x[i] = imgb_inp->y[i] = 0;
-
-    imgb_inp->w[0] = imgb_inp->aw[0] = avctx->width; // width luma
-    imgb_inp->w[1] = imgb_inp->w[2] = imgb_inp->aw[1] = imgb_inp->aw[2] = width_chroma;
-    imgb_inp->h[0] = imgb_inp->ah[0] = avctx->height; // height luma
-    imgb_inp->h[1] = imgb_inp->h[2] = imgb_inp->ah[1] = imgb_inp->ah[2] = height_chroma;
-#endif
 
     return 0;
 }
