@@ -31,33 +31,11 @@ typedef struct APVParserContext {
     int parsed_extradata;
 } APVParserContext;
 
-// @deprecated
-// @todo reimplemntation is needed
-// @see WD1_APV_spec section 7.2
-static int parse_frame_data(AVCodecParserContext *s, AVCodecContext *avctx,
-                            const uint8_t *buf, int buf_size)
-{
-    APVParserContext *ctx = s->priv_data;
-    GetBitContext gb;
-    int ret;
-
-    if (buf_size <= 0) {
-        av_log(avctx, AV_LOG_ERROR, "Invalid Frame Data size: (%d)\n", buf_size);
-        return AVERROR_INVALIDDATA;
-    }
-
-    ret = init_get_bits8(&gb, buf, buf_size);
-    if (ret < 0)
-        return ret;
-
-    ff_apv_parse_frame_data(&gb, &ctx->ps.frame_data);
-
-    return 0;
-}
-
 /**
- * @deprecated
  * @todo Provide implementation
+ * @note The current implementation of the parse_apv_bitstream function does nothing.
+ *       If it is not needed, it should be removed.
+ * 
  * @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-raw-bitstream-format
  * 
  * Parse APV bitstream
@@ -100,7 +78,7 @@ static int decode_extradata(AVCodecParserContext *s, AVCodecContext *avctx)
     return 0;
 }
 
-// @notice Consider whether there is a need to parse the stream.
+// @note Consider whether parsing APV stream is needed
 static int apv_parse(AVCodecParserContext *s, AVCodecContext *avctx,
                      const uint8_t **poutbuf, int *poutbuf_size,
                      const uint8_t *buf, int buf_size)
