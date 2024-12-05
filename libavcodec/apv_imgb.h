@@ -1,6 +1,4 @@
 /*
- * APV definitions and enums
- *
  * Copyright (c) 2024 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
