@@ -21,14 +21,8 @@
 
 /* assert function */
 #include <assert.h>
-#include <pthread.h>
 
 #include "apv_imgb.h"
-
-#define assert_rv(x,r) {if(!(x)){assert(x); return (r);}}
-
-#define OAPV_IMG_CLIP_VAL(n, min, max) (((n) > (max)) ? (max) : (((n) < (min)) ? (min) : (n)))
-#define OAPV_IMG_ALIGN_VAL(val, align) ((((val) + (align) - 1) / (align)) * (align))
 
 #if defined(_MSC_VER) // Microsoft Visual C++
 #include <intrin.h>
@@ -57,6 +51,11 @@ static int apv_atomic_dec(volatile int* pcnt) {
     return new_value;
 }
 #endif
+
+#define assert_rv(x,r) {if(!(x)){assert(x); return (r);}}
+
+#define OAPV_IMG_CLIP_VAL(n, min, max) (((n) > (max)) ? (max) : (((n) < (min)) ? (min) : (n)))
+#define OAPV_IMG_ALIGN_VAL(val, align) ((((val) + (align) - 1) / (align)) * (align))
 
 static void * apv_picbuf_alloc(int size)
 {
