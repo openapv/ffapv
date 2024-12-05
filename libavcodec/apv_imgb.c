@@ -21,6 +21,7 @@
 
 /* assert function */
 #include <assert.h>
+#include <pthread.h>
 
 #include "apv_imgb.h"
 
@@ -29,41 +30,39 @@
 #define OAPV_IMG_CLIP_VAL(n, min, max) (((n) > (max)) ? (max) : (((n) < (min)) ? (min) : (n)))
 #define OAPV_IMG_ALIGN_VAL(val, align) ((((val) + (align) - 1) / (align)) * (align))
 
-/* Function for atomic increament:
-   This function might need to modify according to O/S or CPU platform
-*/
-static int apv_atomic_inc(volatile int* pcnt)
-{
-    int ret;
-    ret = *pcnt;
-    ret++;
-    *pcnt = ret;
-    return ret;
+#if defined(_MSC_VER) // Microsoft Visual C++
+#include <intrin.h>
+#define apv_atomic_inc(pcnt) _InterlockedIncrement(pcnt)
+#define apv_atomic_dec(pcnt) _InterlockedDecrement(pcnt)
+
+#elif defined(__GNUC__) || defined(__clang__) // GCC i Clang
+#define apv_atomic_inc(pcnt) __sync_fetch_and_add(pcnt, 1) + 1
+#define apv_atomic_dec(pcnt) __sync_fetch_and_sub(pcnt, 1) - 1
+
+#else // In other cases, use mutexes
+#include <pthread.h>
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int apv_atomic_inc(volatile int* pcnt) {
+    pthread_mutex_lock(&lock);
+    int new_value = ++(*pcnt);
+    pthread_mutex_unlock(&lock);
+    return new_value;
 }
 
-/* Function for atomic decrement:
-   This function might need to modify according to O/S or CPU platform
-*/
-static int apv_atomic_dec(volatile int* pcnt)
-{
-    int ret;
-    ret = *pcnt;
-    ret--;
-    *pcnt = ret;
-    return ret;
+static int apv_atomic_dec(volatile int* pcnt) {
+    pthread_mutex_lock(&lock);
+    int new_value = --(*pcnt);
+    pthread_mutex_unlock(&lock);
+    return new_value;
 }
+#endif
 
-/* Function to allocate memory for picture buffer:
-   This function might need to modify according to O/S or CPU platform
-*/
 static void * apv_picbuf_alloc(int size)
 {
     return malloc(size);
 }
 
-/* Function to free memory allocated for picture buffer:
-   This function might need to modify according to O/S or CPU platform
-*/
 static void apv_picbuf_free(void* p)
 {
     if (p) {free(p);}
@@ -256,6 +255,8 @@ oapv_imgb_t * apv_imgb_create(int w, int h, int cs, AVCodecContext *avctx)
     imgb->getref = apv_imgb_getref;
     imgb->release = apv_imgb_release;
 
+    imgb->refcnt = 0;
+
     imgb->addref(imgb); /* increase reference count */
     return imgb;
 
@@ -283,6 +284,7 @@ int apv_imgb_release(oapv_imgb_t * imgb)
         }
         free(imgb);
     }
+
     return refcnt;
 }
 
