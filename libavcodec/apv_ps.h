@@ -44,7 +44,7 @@ typedef struct APVByteAlignemnt {
 } APVByteAlignemnt;
 
 // The sturcture reflects Tile Header layout
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile-header
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-tile-header
 
 // The following descriptors specify the parsing process of each element
 // u(n) - unsigned integer using n bits
@@ -53,7 +53,7 @@ typedef struct APVTileHeader {
     uint16_t tile_header_size;                          // u(16)
     uint16_t tile_index;                                // u(16)
 
-    uint32_t tile_data_size_minus1[APV_COLOR_COMP_NUM]; // u(32)
+    uint32_t tile_data_size[APV_COLOR_COMP_NUM];        // u(32)
 
 
     uint8_t tile_qp[APV_COLOR_COMP_NUM];                // u(8)
@@ -64,16 +64,16 @@ typedef struct APVTileHeader {
 } APVTileHeader;
 
 // The sturcture reflects Tile Info sturcture layout
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile-info
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#section-5.3.8
 //
 // The following descriptors specify the parsing process of each element
 // u(n) - unsigned integer using n bits
 // ue(v) - unsigned integer 0-th order Exp_Golomb-coded syntax element with the left bit first
 typedef struct APVTileInfo {
-    uint32_t tile_width_in_mbs_minus1;              // u(28)
-    uint32_t tile_height_in_mbs_minus1;             // u(28)
+    uint32_t tile_width_in_mbs;                     // u(20)
+    uint32_t tile_height_in_mbs;                    // u(20)
     uint8_t  tile_size_present_in_fh_flag;          // u(1)
-    uint32_t *tile_size_minus1;                     // table of size NumTiles; elements of u(32) type
+    uint32_t *tile_size_in_fh;                      // table of size NumTiles; elements of u(32) type
 
     uint32_t *ColStarts; // table of size FrameWidthInMbsY
     uint32_t *RowStarts; // table of size FrameHeightInMbsY
@@ -83,20 +83,20 @@ typedef struct APVTileInfo {
 
 } APVTileInfo;
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-quantization-matrix
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-quantization-matrix
 typedef struct APVQuantizationMatrix {
-    uint8_t q_matrix_minus1[3][8][8];
+    uint8_t q_matrix[3][8][8];
 } APVQuantizationMatrix;
 
-// @see  https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-information
+// @see  https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-frame-information
 // 5.3.6. Frame information
 typedef struct APVFrameInfo {
     uint8_t profile_idc;                             // u(8)
     uint8_t level_idc;                               // u(8)
     uint8_t band_idc;                                // u(3)
     uint8_t reserved_zero_5bits;                     // u(5)
-    uint32_t frame_width_minus1;                     // u(32)
-    uint32_t frame_height_minus1;                    // u(32)
+    uint32_t frame_width;                            // u(24)
+    uint32_t frame_height;                           // u(24)
     uint8_t chroma_format_idc;                       // u(4)
     uint8_t bit_depth_minus8;                        // u(4)
     uint8_t capture_time_distance;                   // u(8)
@@ -123,8 +123,6 @@ typedef struct APVFrameDataHeader {
     APVByteAlignemnt byte_alignent;
 
 } APVFrameDataHeader;
-
-
 
 // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.3
 typedef struct APVPBUHeader {

@@ -37,24 +37,11 @@
     _a < _b ? _a : _b;       \
 })
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-arithmetic-operators
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-arithmetic-operators
 #define ffapv_clip3(min, max, val) ffapv_max( (min), ffapv_min((max), (val)) )
 
-
-// @see APV Technical Note 2.6 Entropy coding (Zig-zag scanning of an 8x8 transform block)
-const uint16_t ScanOrder[APV_BLOCK_D] = {
-    0,    1,    8,   16,    9,    2,    3,   10,
-    17,   24,   32,   25,   18,   11,    4,    5,
-    12,   19,   26,   33,   40,   48,   41,   34,
-    27,   20,   13,    6,    7,   14,   21,   28,
-    35,   42,   49,   56,   57,   50,   43,   36,
-    29,   22,   15,   23,   30,   37,   44,   51,
-    58,   59,   52,   45,   38,   31,   39,   46,
-    53,   60,   61,   54,   47,   55,   62,   63,
-};
-
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.3
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-primitive-bitstream-unit-he
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#section-5.3.3
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-primitive-bitstream-unit-he
 int ff_apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
 {
     pbuh->pbu_type                      = get_bits(gb, 8);
@@ -64,10 +51,10 @@ int ff_apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile-info
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-info
 int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileInfo *ti)
 {
-    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-source-decoded-and-output-f
+    // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-source-decoded-and-output-f
     int MbWidth = APV_MB_WIDTH;
     int MbHeight = APV_MB_HEIGHT;
 
@@ -79,11 +66,11 @@ int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileIn
     int startMb = 0;
     int i = 0;
 
-    ti->tile_width_in_mbs_minus1 = get_bits(gb, 28);
-    ti->tile_height_in_mbs_minus1 = get_bits(gb, 28);
+    ti->tile_width_in_mbs = get_bits(gb, 20);
+    ti->tile_height_in_mbs = get_bits(gb, 20);
 
-    FrameWidthInSamplesY = fdh->frame_info.frame_width_minus1 + 1;
-    FrameHeightInSamplesY = fdh->frame_info.frame_height_minus1 + 1;
+    FrameWidthInSamplesY = fdh->frame_info.frame_width;
+    FrameHeightInSamplesY = fdh->frame_info.frame_height;
     FrameWidthInMbsY = ceil( FrameWidthInSamplesY / MbWidth );
     FrameHeightInMbsY = ceil( FrameHeightInSamplesY / MbHeight );
 
@@ -95,7 +82,7 @@ int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileIn
 
     for( i = 0; startMb < FrameWidthInMbsY; i++ ) {
         ti->ColStarts[ i ] = startMb * MbWidth;
-        startMb += ti->tile_width_in_mbs_minus1 + 1;
+        startMb += ti->tile_width_in_mbs;
     }
 
     ti->ColStarts[ i ] = FrameWidthInMbsY * MbWidth;
@@ -111,26 +98,26 @@ int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileIn
 
     for( i = 0; startMb < FrameHeightInMbsY; i++ ) {
         ti->RowStarts[ i ] = startMb * MbHeight;
-        startMb += ti->tile_height_in_mbs_minus1 + 1;
+        startMb += ti->tile_height_in_mbs + 1;
     }
 
     ti->RowStarts[ i ] = FrameHeightInMbsY * MbHeight;
     ti->TileRows = i;
     ti->NumTiles = ti->TileCols * ti->TileRows;
 
-    if(!ti->tile_size_minus1)
-        free(ti->tile_size_minus1);
+    if(!ti->tile_size_in_fh)
+        free(ti->tile_size_in_fh);
 
     // @todo remember to free it
-    ti->tile_size_minus1 = malloc(sizeof(uint32_t) * ti->NumTiles);
+    ti->tile_size_in_fh = malloc(sizeof(uint32_t) * ti->NumTiles);
 
     for( i = 0; i < ti->NumTiles ; i++ )
-        ti->tile_size_minus1[i] = get_bits(gb, 32);
+        ti->tile_size_in_fh[i] = get_bits(gb, 32);
 
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-byte_aligned
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-byte_aligned
 // byte_aligned( ) is specified as follows:
 // — If the current position in the bitstream is on a byte boundary, i.e., the next bit in the bitstream is the first bit in a byte, the return value of byte_aligned( ) is equal to TRUE.
 // — Otherwise, the return value of byte_aligned( ) is equal to FALSE.
@@ -144,7 +131,7 @@ static int byte_aligned(GetBitContext *gb)
         return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-byte_aligned
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-byte-alignment
 int ff_apv_byte_alignment(GetBitContext *gb, APVByteAlignemnt *ba)
 {
     while(!byte_aligned(gb))
@@ -152,27 +139,27 @@ int ff_apv_byte_alignment(GetBitContext *gb, APVByteAlignemnt *ba)
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-quantization-matrix
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-quantization-matrix
 int ff_apv_quantization_matrix(GetBitContext *gb, int num_comp, APVQuantizationMatrix *qm)
 {
     for( int cIdx = 0; cIdx < num_comp; cIdx ++ ) {
         for( int y = 0; y < 8; y ++ ) {
             for( int x = 0; x < 8; x ++ )
-                qm->q_matrix_minus1[ cIdx ][ x ][ y ] = get_bits(gb, 8);
+                qm->q_matrix[ cIdx ][ x ][ y ] = get_bits(gb, 8);
         }
     }
     return 0;
 }
 
-// https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-information
+// https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-frame-information
 int ff_apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *frame_info)
 {
     frame_info->profile_idc                    = get_bits(gb, 8);
     frame_info->level_idc                      = get_bits(gb, 8);
     frame_info->band_idc                       = get_bits(gb, 3);
     frame_info->reserved_zero_5bits            = get_bits(gb, 5);
-    frame_info->frame_width_minus1             = get_bits(gb, 32);
-    frame_info->frame_height_minus1            = get_bits(gb, 32);
+    frame_info->frame_width                    = get_bits(gb, 24);
+    frame_info->frame_height                   = get_bits(gb, 24);
     frame_info->chroma_format_idc              = get_bits(gb, 4);
     frame_info->bit_depth_minus8               = get_bits(gb, 4);
     frame_info->capture_time_distance          = get_bits(gb, 8);
@@ -236,7 +223,7 @@ static int apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-header
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-frame-header
 // @todo check complence with documentation
 int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *frame_header)
 {
@@ -272,7 +259,7 @@ int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *frame_heade
     return ret;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-process-for-variable-length
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-process-for-variable-length-
 // @todo check complence with documentation
 static int read_vlc(GetBitContext *gb, uint32_t kParam)
 {
@@ -311,7 +298,7 @@ static int read_vlc(GetBitContext *gb, uint32_t kParam)
     return symbolValue;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-ac-coefficient-coding
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-ac-coefficient-coding
 // @todo check complience with documentation
 static void ac_coeff_coding( GetBitContext *gb, uint32_t Prev1stAcLevel, int32_t TransCoeff[APV_COLOR_COMP_NUM][APV_MB_WIDTH][APV_MB_HEIGHT], uint32_t x0, uint32_t y0, int log2BlkWidth, int log2BlkHeight, int cIdx )
 {
@@ -352,7 +339,7 @@ static void ac_coeff_coding( GetBitContext *gb, uint32_t Prev1stAcLevel, int32_t
     } while ( scanPos < ( 1 << ( log2BlkWidth + log2BlkHeight ) ) );
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-macroblock-layer
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-macroblock-layer
 // @todo check complience with documentation
 static int macroblock_layer( GetBitContext *gb, const APVFrameDataHeader *fdh, uint32_t Prev1stAcLevel,  uint32_t xMb, uint32_t yMb, uint32_t cIdx )
 {
@@ -401,7 +388,7 @@ static int macroblock_layer( GetBitContext *gb, const APVFrameDataHeader *fdh, u
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.13
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-tile-header
 static int tile_header(GetBitContext *gb,  const APVFrameDataHeader *fdh, APVTileHeader *th)
 {
     int NumComp = num_component(fdh->frame_info.chroma_format_idc);
@@ -410,7 +397,7 @@ static int tile_header(GetBitContext *gb,  const APVFrameDataHeader *fdh, APVTil
     th->tile_index = get_bits(gb, 16);
     
     for(int i=0; i<NumComp; i++) {
-        th->tile_data_size_minus1[i] = get_bits(gb, 32);
+        th->tile_data_size[i] = get_bits(gb, 32);
     }
     
     for(int i=0; i<NumComp; i++) {
@@ -424,7 +411,7 @@ static int tile_header(GetBitContext *gb,  const APVFrameDataHeader *fdh, APVTil
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile-data
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-tile-data
 // @todo check complence with documentation
 // @param cIdx specifying the color component of the current block,
 static int tile_data(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *tile, uint8_t tileIdx, uint8_t cIdx)
@@ -454,7 +441,7 @@ static int tile_data(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-tile
 // @todo check complience with documentation
 int ff_apv_parse_tile(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *tile, uint8_t tileIdx)
 {
@@ -486,7 +473,7 @@ void ff_apv_ps_free(APVParamSets *ps)
     free(fd->tiles);
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-metadata-payload-syntax
+// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-metadata-payload-syntax
 // @todo check complience with documentation
 static int metadata_payload( GetBitContext *gb, uint32_t metadataSize )
 {
@@ -504,7 +491,7 @@ static int metadata_payload( GetBitContext *gb, uint32_t metadataSize )
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-metadata
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-metadata
 // @todo check complience with documentation
 int ff_apv_parse_metadata(GetBitContext *gb, APVFrameData *fd)
 {
@@ -516,7 +503,7 @@ int ff_apv_parse_metadata(GetBitContext *gb, APVFrameData *fd)
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-filler
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-filler
 // @todo check complience with documentation
 int ff_apv_parse_filler_data(GetBitContext *gb, APVFrameData *fd)
 {
