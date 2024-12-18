@@ -69,4 +69,24 @@ enum {
     APV_COLOR_COMP_NUM  = 4     /* number of color component */
 };
 
+/* size of block */
+#define LOG2_BLK                   (3)
+#define LOG2_BLK_W                 (3)
+#define LOG2_BLK_H                 (3)
+#define BLK_W                      (1 << LOG2_BLK)
+#define BLK_H                      (1 << LOG2_BLK)
+#define BLK_D                      (BLK_W * BLK_H)
+
+const static uint16_t ScanOrder[BLK_D] =
+{
+    0,    1,    8,   16,    9,    2,    3,   10,
+    17,   24,   32,   25,   18,   11,    4,    5,
+    12,   19,   26,   33,   40,   48,   41,   34,
+    27,   20,   13,    6,    7,   14,   21,   28,
+    35,   42,   49,   56,   57,   50,   43,   36,
+    29,   22,   15,   23,   30,   37,   44,   51,
+    58,   59,   52,   45,   38,   31,   39,   46,
+    53,   60,   61,   54,   47,   55,   62,   63,
+};
+
 #endif // AVCODEC_APV_H

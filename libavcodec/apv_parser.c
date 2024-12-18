@@ -72,10 +72,17 @@ static int parse_apv_bitstream(AVCodecParserContext *s, AVCodecContext *avctx, c
 }
 
 // Decoding Frame Data from apvC (APVDecoderConfigurationRecord)
-// @todo provide implementation
 static int decode_extradata(AVCodecParserContext *s, AVCodecContext *avctx)
 {
-    return 0;
+    const uint8_t *data = avctx->extradata;
+    int size = avctx->extradata_size;
+    int ret = 0;
+    if (!data || size <= 0)
+        return -1;
+    
+    // @todo provide implementation
+
+    return ret;
 }
 
 // @note Consider whether parsing APV stream is needed
@@ -104,7 +111,7 @@ static int apv_parse(AVCodecParserContext *s, AVCodecContext *avctx,
         return buf_size;
     }
 
-    // poutbuf contains just one Frame Data Unit
+    // poutbuf contains just one Access Unit
     *poutbuf      = buf;
     *poutbuf_size = buf_size;
 
@@ -126,9 +133,9 @@ static void apv_parser_close(AVCodecParserContext *s)
         ctx->ps.frame_data.frame_data_header.tile_info.RowStarts = NULL;
     }
     
-    if(ctx->ps.frame_data.frame_data_header.tile_info.tile_size_minus1) {
-        free(ctx->ps.frame_data.frame_data_header.tile_info.tile_size_minus1);
-        ctx->ps.frame_data.frame_data_header.tile_info.tile_size_minus1 = NULL;
+    if(ctx->ps.frame_data.frame_data_header.tile_info.tile_size_in_fh) {
+        free(ctx->ps.frame_data.frame_data_header.tile_info.tile_size_in_fh);
+        ctx->ps.frame_data.frame_data_header.tile_info.tile_size_in_fh = NULL;
     }
 
     ff_apv_ps_free(&ctx->ps);
