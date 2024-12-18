@@ -25,7 +25,6 @@
 #include "libavcodec/internal.h"
 #include "libavcodec/apv.h"
 #include "libavcodec/apv_parse.h"
-#include "libavcodec/bsf.h"
 
 #include "libavutil/opt.h"
 
@@ -33,9 +32,6 @@
 #include "avformat.h"
 #include "avio_internal.h"
 #include "internal.h"
-
-#define RAW_PACKET_SIZE 1024
-#define APV_FRAME_DATA_HEADER_SIZE 24
 
 typedef struct APVParserContext {
     int got_frame_data;
@@ -47,10 +43,7 @@ typedef struct APVParserContext {
 typedef struct APVDemuxContext {
     const AVClass *class;
     AVRational framerate;
-    int width;
-    int height;
 
-    AVBSFContext *bsf;
     APVParamSets ps;
 
 } APVDemuxContext;
@@ -232,8 +225,8 @@ static int apv_read_header(AVFormatContext *s)
 
     st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     st->codecpar->codec_id = AV_CODEC_ID_APV;
-    st->codecpar->width = frame_info.frame_width_minus1+1;
-    st->codecpar->height = frame_info.frame_height_minus1+1;
+    st->codecpar->width = frame_info.frame_width;
+    st->codecpar->height = frame_info.frame_height;
 
     // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.1
     // Conformance of a coded frame to the 422-10 profile is indicated by profile_idc equal to 33
@@ -347,11 +340,11 @@ static int apv_read_header(AVFormatContext *s)
 
     // This causes sending to the parser full frames, not chunks of data
     // The flag PARSER_FLAG_COMPLETE_FRAMES will be set in demux.c (demux.c: 1316)
-    sti->need_parsing = AVSTREAM_PARSE_HEADERS;
+    // sti->need_parsing = AVSTREAM_PARSE_HEADERS;
+    sti->need_parsing = AVSTREAM_PARSE_FULL_RAW;
 
     st->avg_frame_rate = c->framerate;
 
-    // taken from rawvideo demuxers
     avpriv_set_pts_info(st, 64, 1, 1200000);
 
     return 0;
@@ -371,11 +364,11 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
     ret = ffio_ensure_seekback(s->pb, APV_AU_SIZE_PREFIX_LENGTH);
     if (ret < 0)
         return ret;
-
     ret = avio_read(s->pb, buf, APV_AU_SIZE_PREFIX_LENGTH);
     if (ret < 0) {
         return ret;
     }
+
     if (ret != APV_AU_SIZE_PREFIX_LENGTH)
         return AVERROR_INVALIDDATA;
 
@@ -383,41 +376,31 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
     if (!au_size || au_size > INT_MAX)
             return AVERROR_INVALIDDATA;
 
-    ret = av_get_packet(s->pb, pkt, au_size);
+    avio_seek(s->pb, -APV_AU_SIZE_PREFIX_LENGTH, SEEK_CUR);
+
+    ret = av_get_packet(s->pb, pkt, au_size + APV_AU_SIZE_PREFIX_LENGTH);
     if (ret < 0)
         return ret;
-
-    if (ret != au_size)
-        return AVERROR_INVALIDDATA;
+    
+    pkt->pos= avio_tell(s->pb);
+    pkt->stream_index = 0;
+    
+    if (ret != (au_size + APV_AU_SIZE_PREFIX_LENGTH)) {
+            return AVERROR_INVALIDDATA;
+    }
 
     return ret;
 }
-
-
-static int apv_read_close(AVFormatContext *s)
-{
-    APVDemuxContext *const c = s->priv_data;
-
-    av_bsf_free(&c->bsf);
-    return 0;
-}
-
-static const AVCodecTag apv_tags[] = {
-    { AV_CODEC_ID_APV,  MKTAG('a','p','v','1') },
-    { AV_CODEC_ID_NONE, 0 },
-};
 
 const FFInputFormat ff_apv_demuxer = {
     .p.name         = "apv",
     .p.long_name    = NULL_IF_CONFIG_SMALL("APV Annex B"),
     .p.extensions   = "apv",
-    .p.flags        = AVFMT_GENERIC_INDEX,
+    .p.flags        = AVFMT_GENERIC_INDEX | AVFMT_NOTIMESTAMPS,
     .p.priv_class   = &apv_demuxer_class,
-    .p.codec_tag    = (const AVCodecTag* const []){apv_tags, 0},
     .read_probe     = apv_annexb_probe,
     .read_header    = apv_read_header, // annexb_read_header
-    .read_packet    = apv_read_packet, // annexb_read_packet
-    .read_close     = apv_read_close,
+    .read_packet    = apv_read_packet, // ff_raw_read_partial_packet,//apv_read_packet, // annexb_read_packet
     .flags_internal = FF_INFMT_FLAG_INIT_CLEANUP,
     .raw_codec_id   = AV_CODEC_ID_APV,
     .priv_data_size = sizeof(APVDemuxContext),
