@@ -226,7 +226,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     AVPacket *pkt = apvctx->pkt;
     int ret = 0;
 
-    unsigned char *bs_buf = NULL;
+    uint8_t *bs_buf = NULL;
     uint32_t bs_buf_size = 0;
 
     oapvd_stat_t stat;
@@ -261,8 +261,8 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     pkt_fd = av_packet_clone(pkt);
     av_packet_unref(pkt);
 
-    bs_buf = pkt_fd->data;
-    bs_buf_size = pkt_fd->size;
+    bs_buf = pkt_fd->data + APV_AU_SIZE_PREFIX_LENGTH;
+    bs_buf_size = pkt_fd->size - APV_AU_SIZE_PREFIX_LENGTH;
 
     if (OAPV_FAILED(oapvd_info(bs_buf, bs_buf_size, &aui)))
     {
@@ -408,13 +408,6 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 goto end;
             }
 
-            // @todo Check why the following code causes a problem with APV stream playback
-            // If frame->pkt_dts and frame->pts are set to a value other than AV_NOPTS_VALUE, the stream does not play properly.
-            // Only one frame is displayed.
-            //
-            frame->pkt_dts = AV_NOPTS_VALUE;
-            frame->pts = AV_NOPTS_VALUE;
-
             if (pkt_fd->flags & AV_PKT_FLAG_KEY) {
                 frame->pict_type = AV_PICTURE_TYPE_I;
                 frame->flags |= AV_FRAME_FLAG_KEY;
@@ -425,13 +418,12 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             imgb_o->release(frm->imgb);
             imgb_o = NULL;
 
-
             frm_cnt[i]++;
         }
     }
 
 end:
-    av_packet_free(&pkt_fd);
+    av_packet_unref(pkt_fd);
 
     if(imgb_w != NULL) {
         imgb_w->release(imgb_w);
