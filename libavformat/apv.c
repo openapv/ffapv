@@ -40,7 +40,6 @@
 #define MB_WIDTH    16
 #define MB_HEIGHT   16
 
-// @notice Updated 10.12.2024
 typedef struct APVDecoderFrameInfo {
     uint8_t reserved_zero_6bits;                    // 6 bits
     uint8_t color_description_present_flag;         // 1 bit
@@ -70,7 +69,6 @@ typedef struct APVDecoderFrameInfo {
 
 } APVDecoderFrameInfo;
 
-// @notice Updated 10.12.2024
 typedef struct APVDecoderConfigurationEntry {
     uint8_t pbu_type;                   // 8 bits
     uint8_t number_of_frame_info;       // 8 bits
@@ -79,7 +77,8 @@ typedef struct APVDecoderConfigurationEntry {
 
 } APVDecoderConfigurationEntry;
 
-// @notice Updated 10.12.2024
+// ISOBMFF binding for APV
+// @see https://github.com/openapv/openapv/blob/main/readme/apv_isobmff.md
 typedef struct APVDecoderConfigurationBox {
     uint8_t configurationVersion;           // 8 bits
     uint8_t number_of_configuration_entry;  // 8 bits
@@ -88,7 +87,8 @@ typedef struct APVDecoderConfigurationBox {
 
 } APVDecoderConfigurationBox;
 
-//  5.3.6. Frame information 
+// 5.3.6. Frame information
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame-information
 typedef struct frame_info_t {
     uint8_t profile_idc;            // 8 bits
     uint8_t level_idc;              // 8 bits
@@ -105,42 +105,38 @@ typedef struct frame_info_t {
     uint8_t reserved_zero_8bit;     // 8 bits
 } frame_info_t;
 
-//  5.3.7. Quantization matrix 
+// 5.3.7. Quantization matrix 
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-quantization-matrix
 typedef struct quantization_matrix_t {
     uint8_t q_matrix[3][8][8]; // @todo use NumCmp instead of 3
 } quantization_matrix_t;
 
-//  5.3.8. Tile info 
+// 5.3.8. Tile info
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-info
 typedef struct tile_info_t {
-    uint32_t tile_width_in_mbs;     // u(20)
-    uint32_t tile_height_in_mbs;    // u(20)
-    uint8_t tile_size_present_in_fh_flag; // u(1)
-    uint32_t tile_size_in_fh[TILE_ROWS_MAX*TILE_COLS_MAX]; // u(32) -> size of table: NumTiles
+    uint32_t tile_width_in_mbs;                             // u(20)
+    uint32_t tile_height_in_mbs;                            // u(20)
+    uint8_t tile_size_present_in_fh_flag;                   // u(1)
+    uint32_t tile_size_in_fh[TILE_ROWS_MAX*TILE_COLS_MAX];  // u(32) -> size of table: NumTiles
 
     // private
-    uint32_t NumTiles;
-    
-    // x0 = ColStarts[tileIdx % TileCols]
     uint32_t ColStarts[TILE_COLS_MAX];
-
-    // The value of TileCols MUST be less than or equal to 20.
-    // The value of TileRows MUST be less than or equal to 20.
-    // NumTiles = TileCols * TileRows  
-    // tileIdx <0; NumTiles)
-    //
-    // y0 = RowStarts[tileIdx // TileCols]  
     uint32_t RowStarts[TILE_ROWS_MAX];
 
-    uint32_t TileCols;
+    uint32_t TileCols; // The value of TileCols MUST be less than or equal to TILE_COLS_MAX.
+    uint32_t TileRows; // The value of TileRows MUST be less than or equal to TILE_ROWS_MAX.
+    uint32_t NumTiles;
 
 } tile_info_t;
 
-// 5.3.17. Byte alignment 
+// 5.3.17. Byte alignment
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-byte-alignment
 typedef struct byte_alignment_t {
     uint8_t alignment_bit_equal_to_zero; /* equal to 0*/ // f(1)
 } byte_alignment_t;
 
-// 5.3.5. Frame header 
+// 5.3.5. Frame header
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame-header
 typedef struct frame_header_t {
     frame_info_t frame_info;
     uint8_t reserved_zero_8bits;                // 8 bits
@@ -159,11 +155,14 @@ typedef struct frame_header_t {
     byte_alignment_t byte_alignment_t;
 } frame_header_t;
 
-//  5.3.11. Filler 
+// 5.3.11. Filler
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-filler
 typedef struct filler_t {
     uint8_t *ff_byte; /* is a byte equal to 0xFF */ // f(8)
 } filler_t;
 
+// 5.3.13. Tile header
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-header
 typedef struct tile_header_t {
     uint16_t tile_header_size;                  // u(16)
     uint16_t tile_index;                        // u(16)
@@ -174,27 +173,32 @@ typedef struct tile_header_t {
 
 } tile_header_t;
 
+// 5.3.16. AC coefficient coding
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#section-5.3.16
 typedef struct   {
     uint8_t coeff_zero_run;
     uint8_t abs_ac_coeff_minus1;
     uint8_t sign_ac_coeff;
 } ac_coeff_coding_t;
 
-//  5.3.14. Filler 
+// 5.3.15. Macroblock layer
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-macroblock-layer
 typedef struct macroblock_layer_t {
     uint8_t abs_dc_coeff_diff;  // h(v)
     uint8_t sign_dc_coeff_diff; // u(1)
     ac_coeff_coding_t ac_coeff_coding;
 } macroblock_layer_t;
 
-//  5.3.14. Filler 
+// 5.3.14. Tile data
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-data
 typedef struct tile_data_t {
     macroblock_layer_t macroblock_layer;
     byte_alignment_t byte_alignment;
 } tile_data_t;
 
 
-//  5.3.11. Filler 
+// 5.3.11. Filler
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-filler
 typedef struct tile_t {
     tile_header_t tile_header;
     uint8_t tile_data;
@@ -210,6 +214,8 @@ typedef struct frame_t {
     filler_t filler; 
 } frame_t;
 
+// 5.3.3. Primitive bitstream unit header
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-primitive-bitstream-unit-he
 typedef struct pbu_header_t {
     uint8_t pbu_type;               // 8 bits
     uint16_t group_id;              // 16 bits
@@ -217,6 +223,7 @@ typedef struct pbu_header_t {
 } pbu_header_t;
 
 // 5.3.9. Access unit information 
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-access-unit-information
 typedef struct au_info_t {
     uint16_t num_frames;            // 16 bits
 
@@ -235,7 +242,8 @@ typedef struct {
     uint64_t low;
 } uint128_t;
 
-//  5.3.10. Metadata 
+// 5.3.10. Metadata 
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-metadata
 typedef struct metadata_t {
     uint16_t metadata_size;             // 32 bits
 
@@ -276,6 +284,8 @@ typedef struct metadata_t {
     uint8_t alignment_bit_equal_to_zero;
 } metadata_t;
 
+// 5.3.2. Primitive bitstream unit
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-primitive-bitstream-unit
 typedef struct pbu_t {
     pbu_header_t pbu_header;
     frame_t frame;
@@ -399,7 +409,7 @@ static int apv_read_frame_info(GetBitContext *gb, frame_info_t *frame_info)
 
 static int apv_read_quantization_matrix(GetBitContext *gb, frame_header_t *frame_header) // quantization_matrix_t *m) 
 {
-    int NumComp = getNumComp(&frame_header->frame_info); // APV_MAX_NUM_COMP; // !!!! Pobrac rzeczywisty rozmiar
+    int NumComp = getNumComp(&frame_header->frame_info);
     for (int cIdx=0; cIdx < NumComp; cIdx++) {
         for (int y=0; y<8; y++) {
             for(int x=0; x<8; x++) {
@@ -442,7 +452,7 @@ static int apv_read_tile_info(GetBitContext *gb, frame_info_t *frame_info, frame
         return -1;
     }
 
-    for(i = 0; startMb < FrameWidthInMbsY; i++) {
+    for(i=0; startMb<FrameWidthInMbsY; i++) {
         tile_info->ColStarts[i] = startMb * MbWidth;
         startMb += tile_info->tile_width_in_mbs;
     }
@@ -455,17 +465,19 @@ static int apv_read_tile_info(GetBitContext *gb, frame_info_t *frame_info, frame
         tile_info->RowStarts[i] = startMb * MbWidth;
         startMb += tile_info->tile_width_in_mbs;
     }
+
     tile_info->RowStarts[i] = FrameHeightInMbsY*MbHeight;
-    TileRows = i;
-    tile_info->TileCols = 
+    // TileRows = i;
+    tile_info->TileRows = i;
 
     NumTiles = TileCols * TileRows;
     tile_info->NumTiles = NumTiles;
-
+    // tile_info->NumTiles = tile_info->TileCols * tile_info->TileRows;
+    
     tile_info->tile_size_present_in_fh_flag = get_bits(gb, 1);
     
     if(tile_info->tile_size_present_in_fh_flag) {
-        for(int tileIdx=0; tileIdx<NumTiles; tileIdx++) {
+        for(int tileIdx=0; tileIdx<tile_info->NumTiles; tileIdx++) {
             tile_info->tile_size_in_fh[tileIdx] = get_bits(gb, 32);
         }
     }
@@ -609,7 +621,6 @@ static int metadata_undefined(GetBitContext *gb, metadata_t *metadata, int paylo
 static int apv_filler(GetBitContext *gb) {
     // uint8_t ff_byte;
     while(show_bits(gb, 8) == 0XFF) {
-        // ff_byte = get_bits(gb, 8);
         skip_bits(gb, 8);
     }
     return 0;
@@ -640,9 +651,7 @@ static int ac_coeff_coding(GetBitContext *gb, int x0, int y0, int log2BlkWidth, 
     int scanPos = 1;
     int firstAC = 1;
     int PrevLevel = Prev1stAcLevel;
-    // int PrevRun = 0;
 
-    // int ScanOrder[(1 << log2BlkWidth) * (1 << log2BlkHeight) - 1 + 1];   
     int abs_ac_coeff_minus1;
     int sign_ac_coeff;
     int level;
@@ -659,8 +668,6 @@ static int ac_coeff_coding(GetBitContext *gb, int x0, int y0, int log2BlkWidth, 
             TransCoeff[cIdx][x0+xC][y0 + yC] = 0;
             scanPos++;
         }
-        
-        // PrevRun = coeff_zero_run;
         
         if(scanPos < (1 << (log2BlkWidth + log2BlkHeight))) {;
             abs_ac_coeff_minus1 = get_ue_golomb(gb);        //  h(v)
@@ -683,13 +690,12 @@ static int ac_coeff_coding(GetBitContext *gb, int x0, int y0, int log2BlkWidth, 
     return 0;
 }
 
-// cIdx - [1,3,4] - NumComp
 static int macroblock_layer(GetBitContext *gb, int xMb, int yMb, int cIdx, frame_info_t* frame_info, int PrevDC, int PrevDcDiff, int Prev1stAcLevel) {
 
     int MbWidth = MB_WIDTH;
     int MbHeight = MB_HEIGHT;
 
-    int SubWidthC = getSubWithC(frame_info); // [1,2]
+    int SubWidthC = getSubWithC(frame_info);    // [1,2]
     int SubHeightC = getSubHeightC(frame_info); // [1]
 
     int MbWidthC = MbWidth/SubWidthC;
@@ -703,7 +709,7 @@ static int macroblock_layer(GetBitContext *gb, int xMb, int yMb, int cIdx, frame
 
     uint8_t sign_dc_coeff_diff;
 
-    // Sizes based on 5.3.7 from draft-lim-apv-02.html
+    // Sizes based on 5.3.7 from https://datatracker.ietf.org/doc/html/draft-lim-apv-03
     int16_t TransCoeff[4][8][8];
 
     for(int y = 0; y < blkHeight; y+=TrSize) {
