@@ -338,10 +338,7 @@ static int apv_read_header(AVFormatContext *s)
         st->codecpar->format = AV_PIX_FMT_NONE;
     }
 
-    // This causes sending to the parser full frames, not chunks of data
-    // The flag PARSER_FLAG_COMPLETE_FRAMES will be set in demux.c (demux.c: 1316)
-    // sti->need_parsing = AVSTREAM_PARSE_HEADERS;
-    sti->need_parsing = AVSTREAM_PARSE_FULL_RAW;
+    sti->need_parsing = PARSER_FLAG_COMPLETE_FRAMES; // AVSTREAM_PARSE_FULL_RAW;
 
     st->avg_frame_rate = c->framerate;
 
@@ -399,8 +396,8 @@ const FFInputFormat ff_apv_demuxer = {
     .p.flags        = AVFMT_GENERIC_INDEX | AVFMT_NOTIMESTAMPS,
     .p.priv_class   = &apv_demuxer_class,
     .read_probe     = apv_annexb_probe,
-    .read_header    = apv_read_header, // annexb_read_header
-    .read_packet    = apv_read_packet, // ff_raw_read_partial_packet,//apv_read_packet, // annexb_read_packet
+    .read_header    = apv_read_header,
+    .read_packet    = apv_read_packet,
     .flags_internal = FF_INFMT_FLAG_INIT_CLEANUP,
     .raw_codec_id   = AV_CODEC_ID_APV,
     .priv_data_size = sizeof(APVDemuxContext),
