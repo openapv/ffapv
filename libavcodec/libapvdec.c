@@ -32,6 +32,7 @@
 #include "libavutil/pixfmt.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/cpu.h"
+#include "libavutil/container_fifo.h"
 
 #include "avcodec.h"
 #include "internal.h"
@@ -57,6 +58,11 @@ typedef struct ApvDecContext {
 
     int output_depth;
     int output_csp;
+
+    struct AVContainerFifo *output_fifo;
+    AVFrame* frames[OAPV_MAX_NUM_FRAMES];
+    int num_frames;
+    
 
     AVPacket *pkt;          // frame data
 } ApvDecContext;
@@ -209,6 +215,17 @@ static av_cold int libapvd_init(AVCodecContext *avctx)
 
     apvctx->pkt = av_packet_alloc();
 
+    // Allocate an AVContainerFifo instance for AVFrames
+    apvctx->output_fifo = av_container_fifo_alloc_avframe(0);
+    if (!apvctx->output_fifo)
+        return AVERROR(ENOMEM);
+
+    for (int i = 0; i < FF_ARRAY_ELEMS(apvctx->frames); i++) {
+        apvctx->frames[i] = NULL;
+    }
+
+    apvctx->num_frames = 0;
+
     return 0;
 }
 
@@ -241,6 +258,14 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
 
     AVPacket* pkt_fd; // encoded frame data
     int frm_cnt[OAPV_MAX_NUM_FRAMES];
+
+    if (av_container_fifo_can_read(apvctx->output_fifo))
+        goto do_output;
+
+    for(int i =0; i<apvctx->num_frames;i++ ) {
+        av_frame_unref(apvctx->frames[i]);
+        apvctx->num_frames = 0;
+    }
 
     // frame data (input data)
     ret = ff_decode_get_packet(avctx, pkt);
@@ -353,9 +378,6 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             free(pld);
     }
 
-    // @todo Write decoded frames into AVFrame objects
-    // @notice The current implementation supports only 1 frame per access unit
-    // 
     for(int i = 0; i < ofrms.num_frms; i++) {
         frm = &ofrms.frm[i];
         if(ofrms.num_frms > 0) {
@@ -378,14 +400,12 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 imgb_o = frm->imgb;
             }
 
-            // @todo Copy decoded image into AVFrame object
-            // 
-            // @notice  The current implementation of the openAPV codec does not allow adding multiple frames to a single Access Unit.
-            //          However, the final implementation of the codec is expected to support Access Units containing multiple frames.
-            //          Therefore, a FIFO queue containing AVFrame objects should be used here and AVFrame objects should be added to the queue.
-            //          In subsequent calls to the libapvd_receive_frame function, the next AVFrame objects should be returned from the queue.
-            //
-            ret = libapvd_image_copy(avctx, imgb_o, frame);
+            if(apvctx->frames[i] == NULL) {
+                apvctx->frames[i] = av_frame_alloc();
+            }
+            apvctx->num_frames++;
+
+            ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i]);
             if(ret < 0) {
                 av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
 
@@ -398,7 +418,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             }
 
             // Use ff_decode_frame_props_from_pkt() to fill frame properties
-            ret = ff_decode_frame_props_from_pkt(avctx, frame, pkt_fd);
+            ret = ff_decode_frame_props_from_pkt(avctx, apvctx->frames[i], pkt_fd);
             if (ret < 0) {
                 av_log(avctx, AV_LOG_ERROR, "ff_decode_frame_props_from_pkt error\n");
 
@@ -409,8 +429,8 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             }
 
             if (pkt_fd->flags & AV_PKT_FLAG_KEY) {
-                frame->pict_type = AV_PICTURE_TYPE_I;
-                frame->flags |= AV_FRAME_FLAG_KEY;
+                apvctx->frames[i]->pict_type = AV_PICTURE_TYPE_I;
+                apvctx->frames[i]->flags |= AV_FRAME_FLAG_KEY;
             }
             
             // apvd_t_pull uses pool of objects of type apv_imgb.
@@ -419,6 +439,8 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             imgb_o = NULL;
 
             frm_cnt[i]++;
+
+            ret = av_container_fifo_write(apvctx->output_fifo, apvctx->frames[i], AV_CONTAINER_FIFO_FLAG_REF);
         }
     }
 
@@ -436,8 +458,16 @@ end:
             ofrms.frm[i].imgb = NULL;
         }
     }
+    if (av_container_fifo_can_read(apvctx->output_fifo))
+        goto do_output;
 
-    return ret;
+    return AVERROR(EAGAIN);
+
+do_output:
+    if (av_container_fifo_read(apvctx->output_fifo, frame, 0) >= 0) {
+        return 0;
+    }
+    return 0;
 }
 
 /**
@@ -461,6 +491,12 @@ static av_cold int libapvd_close(AVCodecContext *avctx)
     }
 
     av_packet_free(&apvctx->pkt);
+
+    av_container_fifo_free(&apvctx->output_fifo);
+
+    for (int i = 0; i < FF_ARRAY_ELEMS(apvctx->frames); i++) {
+        av_frame_free(&apvctx->frames[i]);
+    }
 
     return 0;
 }
