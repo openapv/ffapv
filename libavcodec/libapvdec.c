@@ -451,7 +451,7 @@ end:
         imgb_w->release(imgb_w);
         imgb_w = NULL;
     }
-    // zastanow sie czy to powinno byc wyczyszczone tutaj czy step by step po wykorzystniu zdekodowanej ramki
+
     for(int i = 0; i < ofrms.num_frms; i++) {
         if(ofrms.frm[i].imgb != NULL) {
             ofrms.frm[i].imgb->release(ofrms.frm[i].imgb);
