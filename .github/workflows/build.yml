@@ -1,0 +1,66 @@
+name: Build FFmpeg
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            build-essential \
+            cmake \
+            git-core \
+            jq \
+            libass-dev \
+            libfreetype6-dev \
+            libgnutls28-dev \
+            libmp3lame-dev \
+            libsdl2-dev \
+            libtool \
+            libva-dev \
+            libvdpau-dev \
+            libvorbis-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            libxcb-xfixes0-dev \
+            meson \
+            ninja-build \
+            pkg-config \
+            texinfo \
+            wget \
+            yasm \
+            zlib1g-dev
+
+      - name: Fetch and install openAPV dependency
+        run: |
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/openapv/openapv/releases/latest)
+          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith(".deb")) | .browser_download_url')
+          wget $DEB_URL -O openapv.deb
+          sudo dpkg -i openapv.deb
+          sudo apt-get install -f
+
+      - name: Build FFmpeg
+        run: |         
+          ./configure --extra-libs="-lpthread -lm" --enable-ffplay --enable-libapv
+          make -j$(nproc)
+          sudo make install
+
+      - name: Verify run
+        run: |
+          oapv_app_enc
+          ffmpeg -version
