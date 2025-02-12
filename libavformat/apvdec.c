@@ -63,6 +63,34 @@ static const AVClass apv_demuxer_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#section-5.3.3
+// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-primitive-bitstream-unit-he
+static int apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
+{
+    pbuh->pbu_type                      = get_bits(gb, 8);
+    pbuh->group_id                      = get_bits(gb, 16);
+    pbuh->reserved_zer_8bits            = get_bits(gb, 8);
+        
+    return 0;
+}
+
+// https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-frame-information
+static int apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *frame_info)
+{
+    frame_info->profile_idc                    = get_bits(gb, 8);
+    frame_info->level_idc                      = get_bits(gb, 8);
+    frame_info->band_idc                       = get_bits(gb, 3);
+    frame_info->reserved_zero_5bits            = get_bits(gb, 5);
+    frame_info->frame_width                    = get_bits(gb, 24);
+    frame_info->frame_height                   = get_bits(gb, 24);
+    frame_info->chroma_format_idc              = get_bits(gb, 4);
+    frame_info->bit_depth_minus8               = get_bits(gb, 4);
+    frame_info->capture_time_distance          = get_bits(gb, 8);
+    frame_info->reserved_zero_8bits            = get_bits(gb, 8);
+    
+    return 0;
+}
+
 // The implementation of the probe function is in accordance with the documentation provided in draft-lim-apv-02 version 02. 
 // https://datatracker.ietf.org/doc/html/draft-lim-apv-02
 static int apv_annexb_probe(const AVProbeData *p)
@@ -88,7 +116,7 @@ static int apv_annexb_probe(const AVProbeData *p)
     // skip a four-byte length PBU Size syntax element, which indicates the size of the PBU in bytes
     skip_bits_long(&gb, 32);
 
-    ff_apv_parse_pbu_header(&gb, &ev.pbu_header);
+    apv_parse_pbu_header(&gb, &ev.pbu_header);
     
     if( ev.pbu_header.pbu_type == 1  ||
         ev.pbu_header.pbu_type == 2  ||
@@ -96,7 +124,7 @@ static int apv_annexb_probe(const AVProbeData *p)
         ev.pbu_header.pbu_type == 26 ||
         ev.pbu_header.pbu_type == 27 ) {
 
-        ff_apv_parse_frame_info(&gb, &ev.frame_info);
+        apv_parse_frame_info(&gb, &ev.frame_info);
     
         // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.1
         // Conformance of a coded frame to the 422-10 profile is indicated by profile_idc equal to 33
@@ -212,13 +240,13 @@ static int apv_read_header(AVFormatContext *s)
     skip_bits_long(&gb, 32); // AU size
     skip_bits_long(&gb, 32); // PBU size
 
-    ff_apv_parse_pbu_header(&gb, &pbu_header);
+    apv_parse_pbu_header(&gb, &pbu_header);
 
     if((1  <= pbu_header.pbu_type && pbu_header.pbu_type <=2) ||
        (25 <= pbu_header.pbu_type && pbu_header.pbu_type <= 27))    {
-        ff_apv_parse_frame_info(&gb,  &frame_info);
+        apv_parse_frame_info(&gb,  &frame_info);
     } else if(pbu_header.pbu_type == 65) {
-        ff_apv_parse_frame_info(&gb, &frame_info);
+        apv_parse_frame_info(&gb, &frame_info);
     } else {
         return 0;
     }
