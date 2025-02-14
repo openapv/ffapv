@@ -1541,7 +1541,7 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .type      = AVMEDIA_TYPE_VIDEO,
         .name      = "apng",
         .long_name = NULL_IF_CONFIG_SMALL("APNG (Animated Portable Network Graphics) image"),
-        .props     = AV_CODEC_PROP_LOSSLESS,
+        .props     = AV_CODEC_PROP_LOSSLESS | AV_CODEC_PROP_INTRA_ONLY,
         .mime_types= MT("image/png"),
     },
     {
