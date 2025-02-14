@@ -66,6 +66,7 @@ typedef struct APVDecoderFrameInfo {
     uint8_t transfer_characteristics;               // 8 bits
     uint8_t matrix_coefficients;                    // 8 bits
     uint8_t full_range_flag;                        // 1 bit
+    uint8_t reserved_zero_7bits;                    // 7 bits
 
 } APVDecoderFrameInfo;
 
@@ -79,13 +80,13 @@ typedef struct APVDecoderConfigurationEntry {
 
 // ISOBMFF binding for APV
 // @see https://github.com/openapv/openapv/blob/main/readme/apv_isobmff.md
-typedef struct APVDecoderConfigurationBox {
+typedef struct APVDecoderConfigurationRecord  {
     uint8_t configurationVersion;           // 8 bits
     uint8_t number_of_configuration_entry;  // 8 bits
 
     APVDecoderConfigurationEntry *configuration_entry; // table of size number_of_configuration_entry
 
-} APVDecoderConfigurationBox;
+} APVDecoderConfigurationRecord ;
 
 // 5.3.6. Frame information
 // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame-information
@@ -443,13 +444,13 @@ static int apv_number_of_pbu_entry(const uint8_t *data, uint32_t au_size) {
     return ret;
 }
 
-static void apvc_init(APVDecoderConfigurationBox* apvc)
+static void apvc_init(APVDecoderConfigurationRecord * apvc)
 {
-    memset(apvc, 0, sizeof(APVDecoderConfigurationBox));
+    memset(apvc, 0, sizeof(APVDecoderConfigurationRecord ));
     apvc->configurationVersion = 1;
 }
 
-static void apvc_close(APVDecoderConfigurationBox* apvc)
+static void apvc_close(APVDecoderConfigurationRecord * apvc)
 {
     for(int i=0;i<apvc->number_of_configuration_entry;i++) {
 
@@ -461,7 +462,7 @@ static void apvc_close(APVDecoderConfigurationBox* apvc)
     apvc->configuration_entry = NULL;
 }
 
-static int apvc_write(AVIOContext *pb, APVDecoderConfigurationBox* apvc)
+static int apvc_write(AVIOContext *pb, APVDecoderConfigurationRecord * apvc)
 {
     av_log(NULL, AV_LOG_TRACE, "configurationVersion:                           %"PRIu8"\n", 
     apvc->configurationVersion);
@@ -577,7 +578,8 @@ static int apvc_write(AVIOContext *pb, APVDecoderConfigurationBox* apvc)
                 avio_w8(pb, apvc->configuration_entry[i].frame_info[j].matrix_coefficients);
 
                 /* unsigned int(1) full_range_flag */
-                avio_w8(pb, apvc->configuration_entry[i].frame_info[j].full_range_flag);
+                avio_w8(pb, apvc->configuration_entry[i].frame_info[j].full_range_flag << 7 |
+                            apvc->configuration_entry[i].frame_info[j].reserved_zero_7bits);
             }
         }
     }
@@ -588,7 +590,7 @@ static int apvc_write(AVIOContext *pb, APVDecoderConfigurationBox* apvc)
 int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
                        int size, int ps_array_completeness)
 {
-    APVDecoderConfigurationBox apvc;
+    APVDecoderConfigurationRecord  apvc;
     uint32_t au_size = 0;
     uint32_t number_of_configuration_entry = 0;
 
@@ -646,7 +648,7 @@ int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
             ret = apv_read_pbu(data, pbu_size, &pbu);
             if(ret!=0)  goto end;
 
-            // fill APVDecoderConfigurationBox
+            // fill APVDecoderConfigurationRecord 
             apvc.configuration_entry[i].pbu_type = pbu.pbu_header.pbu_type;
             apvc.configuration_entry[i].number_of_frame_info = number_of_frame_info;
 
@@ -679,6 +681,7 @@ int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
 
                     // @todo Figure out what value the field should have if number_of_frame_info is different from 1.
                     apvc.configuration_entry[i].frame_info[j].full_range_flag = (number_of_frame_info == 1) ? 1 : 0;
+                    apvc.configuration_entry[i].frame_info[j].reserved_zero_7bits = 0;
                 }
             }
             data += pbu_size;
