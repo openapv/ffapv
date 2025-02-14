@@ -555,7 +555,7 @@ static const FFCodecDefault libapve_defaults[] = {
 };
 
 const FFCodec ff_libapv_encoder = {
-    .p.name             = "libapve",
+    .p.name             = "liboapv",
     .p.long_name        = NULL_IF_CONFIG_SMALL("libapve APV"),
     .p.type             = AVMEDIA_TYPE_VIDEO,
     .p.id               = AV_CODEC_ID_APV,
