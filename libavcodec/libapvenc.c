@@ -93,14 +93,17 @@ typedef struct ApvEncContext {
                             //  - 2: YUV422
                             //  - 3: YUV444
 
-    int qp_cb_offset;
-    int qp_cr_offset;
+    int qp_c1_offset;
+    int qp_c2_offset;
+    int qp_c3_offset;
+
     int tile_w_mb;
     int tile_h_mb;
 
-    char q_matrix_y[512];
-    char q_matrix_u[512];
-    char q_matrix_v[512];
+    char q_matrix_c0[512];
+    char q_matrix_c1[512];
+    char q_matrix_c2[512];
+    char q_matrix_c3[512];
 
     AVDictionary *apve_params;
 } ApvEncContext;
@@ -508,28 +511,28 @@ static const enum AVPixelFormat supported_pixel_formats[] = {
 // Consider using following options (./ffmpeg --help encoder=libapve)
 //
 static const AVOption libapve_options[] = {
-    { "complexity", "Encoder complexity", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
-    { "nordo", "no rdo", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "complexity" },
-    { "rdo",  "enable rdo quantization daed-zone", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "complexity" },
+    { "preset", "preset (not implemented yet)", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "preset" },
+    { "level", "level (not implemented yet)", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "level" },
+    { "profile", "profile (not implemented yet)", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "profile" },
 
-    { "q-matrix-y", "q_matrix_y \"q1 q2 ... q63 q64\"", OFFSET(q_matrix_y), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
-    { "q-matrix-u", "q_matrix_u \"q1 q2 ... q63 q64\"", OFFSET(q_matrix_u), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
-    { "q-matrix-v", "q_matrix_v \"q1 q2 ... q63 q64\"", OFFSET(q_matrix_v), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
+    { "q-matrix-c0", "q_matrix_c0 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c0), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
+    { "q-matrix-c1", "q_matrix_c1 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c1), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
+    { "q-matrix-c2", "q_matrix_c2 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c2), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
+    { "q-matrix-c3", "q_matrix_c3 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c3), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
 
     { "tile-w-mb", "Width of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "tile-h-mb", "Height of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
-    { "qp-cb-offset", "cb qp offset", OFFSET(qp_cb_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
-    { "qp-cr-offset", "cr qp offset", OFFSET(qp_cr_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
-
-    { "qp-cr-offset", "cr qp offset", OFFSET(qp_cr_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
+    { "qp-offset-c1", "c1 qp offset (not implemented yet)", OFFSET(qp_c1_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
+    { "qp-offset-c2", "c2 qp offset (not implemented yet)", OFFSET(qp_c2_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
+    { "qp-offset-c3", "c3 qp offset (not implemented yet)", OFFSET(qp_c3_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
     { "rc_type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_CQP }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
     { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
     { "ABR", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_ABR }, INT_MIN, INT_MAX, VE, "rc_type" },
     
     { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
-    { "crf", "Constant rate factor value for CRF rate control mode", OFFSET(crf), AV_OPT_TYPE_INT, { .i64 = 32 }, 10, 49, VE },
+    // { "crf", "Constant rate factor value for CRF rate control mode", OFFSET(crf), AV_OPT_TYPE_INT, { .i64 = 32 }, 10, 49, VE }, // @todo not supported by APV yet
 
     { "hash", "Embed picture signature (HASH) for conformance checking in decoding", OFFSET(hash), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE },
 
