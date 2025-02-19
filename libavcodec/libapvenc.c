@@ -69,11 +69,11 @@ typedef struct ApvEncContext {
 
     int num_frames;         // number of frames in an access unit
     
-    int profile_id;         // encoder profile (baseline)
-                            // the first version of the APV codec defines a profile, Baseline profile,
-                            // which supports 16x16 MB size and 8x8 transform size.
+    int profile_id;         // encoder profile (33,44,55,66,77,88,99)
+    int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
+    int level_idc;
+    int band_idc;
 
-    int preset_id;          // preset of apv ( fast, medium, slow, placebo)
     int tune_id;            // tune of apv (psnr, zerolatency)
 
     // variables for rate control types
@@ -105,7 +105,7 @@ typedef struct ApvEncContext {
     char q_matrix_c2[512];
     char q_matrix_c3[512];
 
-    AVDictionary *apve_params;
+    AVDictionary *oapv_params;
 } ApvEncContext;
 
 /**
@@ -179,7 +179,7 @@ static int libapve_apv_color_space(enum AVPixelFormat av_pix_fmt)
  * The field values of the oapve_cdesc_t structure are populated based on:
  * - the corresponding field values of the AvCodecConetxt structure,
  * - the apv encoder specific option values,
- *   (the full list of options available for apv encoder is displayed after executing the command ./ffmpeg --help encoder = libapve)
+ *   (the full list of options available for apv encoder is displayed after executing the command ./ffmpeg --help encoder = liboapv)
  *
  * The order of processing input data and populating the apve_cdsc structure
  * 1) first, the fields of the AVCodecContext structure corresponding to the provided input options are processed,
@@ -203,15 +203,15 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 
     apvctx = avctx->priv_data;
 
-    /* initialize apv_param struct with default values */
-    ret = oapve_param_default(cdsc->param);
-    if (OAPV_FAILED(ret)) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot set default parameter\n");
-        return AVERROR_EXTERNAL;
-    }
-
     for(int i=0;i<OAPV_MAX_NUM_FRAMES;i++) {
-    
+
+        /* initialize apv_param struct with default values */
+        ret = oapve_param_default(&cdsc->param[i]);
+        if (OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Cannot set default parameter\n");
+            return AVERROR_EXTERNAL;
+        }
+
         /* read options from AVCodecContext */
         if (avctx->width > 0)
             cdsc->param[i].w = avctx->width;
@@ -233,6 +233,11 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 
         cdsc->param[i].rc_type = apvctx->rc_type;
 
+        cdsc->param[i].preset = apvctx->preset_id;
+        cdsc->param[i].profile_idc = apvctx->profile_id;
+        cdsc->param[i].level_idc = apvctx->level_idc;
+        cdsc->param[i].band_idc = apvctx->band_idc;
+        
         if (apvctx->rc_type == OAPV_RC_CQP)
             cdsc->param[i].qp = apvctx->qp;
         else if (apvctx->rc_type == OAPV_RC_ABR) {
@@ -288,6 +293,7 @@ static int set_extra_config(AVCodecContext *avctx, oapvd_t id, ApvEncContext *ct
             return AVERROR_EXTERNAL;
         }
     }
+
     return ret;
 }
 
@@ -319,6 +325,9 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 
     oapve_cdesc_t *cdsc =  &(apvctx->cdsc);
     int ret = 0;
+
+    int size_bitrate;
+    int value_bitrate;
 
     /* allocate bitstream buffer */
     bs_buf = (unsigned char *)av_malloc(MAX_BS_BUF);
@@ -508,13 +517,47 @@ static const enum AVPixelFormat supported_pixel_formats[] = {
     AV_PIX_FMT_NONE
 };
 
-// Consider using following options (./ffmpeg --help encoder=libapve)
+// Consider using following options (./ffmpeg --help encoder=liboapv)
 //
-static const AVOption libapve_options[] = {
-    { "preset", "preset (not implemented yet)", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "preset" },
-    { "level", "level (not implemented yet)", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "level" },
-    { "profile", "profile (not implemented yet)", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 1, VE, "profile" },
+static const AVOption liboapv_options[] = {
+    { "preset", "Encoding preset for setting encoding speed (optimization level control)", OFFSET(preset_id), AV_OPT_TYPE_INT, { .i64 = OAPV_PRESET_DEFAULT }, OAPV_PRESET_FASTEST, OAPV_PRESET_PLACEBO, VE, .unit = "preset" },
+    { "fastest", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_FASTEST },    INT_MIN, INT_MAX, VE, .unit = "preset" },
+    { "fast",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_FAST },    INT_MIN, INT_MAX, VE, .unit = "preset" },
+    { "medium",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_MEDIUM },  INT_MIN, INT_MAX, VE, .unit = "preset" },
+    { "slow",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_SLOW },    INT_MIN, INT_MAX, VE, .unit = "preset" },
+    { "placebo", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_PLACEBO }, INT_MIN, INT_MAX, VE, .unit = "preset" },
+    { "default", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_DEFAULT }, INT_MIN, INT_MAX, VE, .unit = "preset" },
 
+    { "profile", "Encoding profile", OFFSET(profile_id), AV_OPT_TYPE_INT, { .i64 = OAPV_PROFILE_422_10 }, OAPV_PROFILE_422_10,  99, VE, .unit = "profile" },
+    { "422-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PROFILE_422_10 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+    { "422-12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 44 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+    { "444-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 55 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+    { "444-12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 66 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+    { "4444-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 77 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+    { "4444-12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 88 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+    { "400-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 99 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
+
+    // @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-overview-of-profiles-levels
+    // level_idc MUST be set equal to a value of 30 times the level number specified in Table 4
+    //
+    { "level", "level", OFFSET(level_idc), AV_OPT_TYPE_INT, { .i64 = (int)(4.1 * 30) }, 1,  (int)(7.1 * 30), VE, .unit = "level" },
+    { "1",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(1 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "1.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(1.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "2",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(2 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "2.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(2.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "3",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(3 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "3.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(3.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "4",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(4 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "4.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(4.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "5",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(5 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "5.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(5.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "6",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(6 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "6.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(6.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "7",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
+    { "7.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
+
+    { "band_idc", "band_idc", OFFSET(band_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
+    
     { "q-matrix-c0", "q_matrix_c0 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c0), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
     { "q-matrix-c1", "q_matrix_c1 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c1), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
     { "q-matrix-c2", "q_matrix_c2 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c2), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
@@ -527,7 +570,7 @@ static const AVOption libapve_options[] = {
     { "qp-offset-c2", "c2 qp offset (not implemented yet)", OFFSET(qp_c2_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "qp-offset-c3", "c3 qp offset (not implemented yet)", OFFSET(qp_c3_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
-    { "rc_type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_CQP }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
+    { "rc_type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_ABR }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
     { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
     { "ABR", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_ABR }, INT_MIN, INT_MAX, VE, "rc_type" },
     
@@ -536,14 +579,14 @@ static const AVOption libapve_options[] = {
 
     { "hash", "Embed picture signature (HASH) for conformance checking in decoding", OFFSET(hash), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE },
 
-    { "apve-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(apve_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE },
+    { "oapv-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(oapv_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE },
     { NULL }
 };
 
 static const AVClass libapve_class = {
-    .class_name = "libapve",
+    .class_name = "liboapv",
     .item_name  = av_default_item_name,
-    .option     = libapve_options,
+    .option     = liboapv_options,
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
@@ -559,7 +602,7 @@ static const FFCodecDefault libapve_defaults[] = {
 
 const FFCodec ff_libapv_encoder = {
     .p.name             = "liboapv",
-    .p.long_name        = NULL_IF_CONFIG_SMALL("libapve APV"),
+    .p.long_name        = NULL_IF_CONFIG_SMALL("liboapv APV"),
     .p.type             = AVMEDIA_TYPE_VIDEO,
     .p.id               = AV_CODEC_ID_APV,
     .init               = libapve_init,
@@ -569,7 +612,7 @@ const FFCodec ff_libapv_encoder = {
     .p.priv_class       = &libapve_class,
     .defaults           = libapve_defaults,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_DR1,
-    .p.wrapper_name     = "libapve",
+    .p.wrapper_name     = "liboapv",
     .p.pix_fmts         = supported_pixel_formats,
     .caps_internal      = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_NOT_INIT_THREADSAFE,
 };
