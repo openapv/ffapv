@@ -72,7 +72,7 @@ typedef struct ApvEncContext {
     int profile_id;         // encoder profile (33,44,55,66,77,88,99)
     int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
     int level_idc;
-    int bound_idc;
+    int band_idc;
 
     int tune_id;            // tune of apv (psnr, zerolatency)
 
@@ -236,7 +236,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         cdsc->param[i].preset = apvctx->preset_id;
         cdsc->param[i].profile_idc = apvctx->profile_id;
         cdsc->param[i].level_idc = apvctx->level_idc;
-        cdsc->param[i].band_idc = apvctx->bound_idc;
+        cdsc->param[i].band_idc = apvctx->band_idc;
         
         if (apvctx->rc_type == OAPV_RC_CQP)
             cdsc->param[i].qp = apvctx->qp;
@@ -556,7 +556,7 @@ static const AVOption liboapv_options[] = {
     { "7",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
     { "7.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
 
-    { "band_idc", "band_idc", OFFSET(bound_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
+    { "band_idc", "band_idc", OFFSET(band_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
     
     { "q-matrix-c0", "q_matrix_c0 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c0), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
     { "q-matrix-c1", "q_matrix_c1 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c1), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
