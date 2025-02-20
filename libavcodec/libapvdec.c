@@ -61,9 +61,11 @@ typedef struct ApvDecContext {
 
     struct AVContainerFifo *output_fifo;
     AVFrame* frames[OAPV_MAX_NUM_FRAMES];
-    int num_frames;
     
-
+    int frames_count;
+    int total_frames_count;
+    int au_count;
+    
     AVPacket *pkt;          // frame data
 } ApvDecContext;
 
@@ -189,7 +191,7 @@ static av_cold int libapvd_init(AVCodecContext *avctx)
 {
     ApvDecContext *apvctx = avctx->priv_data;
     oapvd_cdesc_t *cdsc = &(apvctx->cdsc);
-    int ret;
+    int ret = 0;
 
     /* read configurations from AVCodecContext and populate the apvd_cdsc structure */
     get_conf(avctx, cdsc);
@@ -224,7 +226,9 @@ static av_cold int libapvd_init(AVCodecContext *avctx)
         apvctx->frames[i] = NULL;
     }
 
-    apvctx->num_frames = 0;
+    apvctx->frames_count = 0;
+    apvctx->total_frames_count = 0;
+    apvctx->au_count = 0;
 
     return 0;
 }
@@ -257,14 +261,13 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     oapv_frm_info_t *finfo = NULL;
 
     AVPacket* pkt_fd; // encoded frame data
-    int frm_cnt[OAPV_MAX_NUM_FRAMES];
 
     if (av_container_fifo_can_read(apvctx->output_fifo))
         goto do_output;
 
-    for(int i =0; i<apvctx->num_frames;i++ ) {
+    for(int i =0; i<apvctx->frames_count;i++ ) {
         av_frame_unref(apvctx->frames[i]);
-        apvctx->num_frames = 0;
+        apvctx->frames_count = 0;
     }
 
     // frame data (input data)
@@ -279,7 +282,6 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         return ret;
     }   
     
-    memset(frm_cnt, 0, sizeof(int) * OAPV_MAX_NUM_FRAMES);
     memset(&ofrms, 0, sizeof(oapv_frms_t));
     memset(&aui, 0, sizeof(oapv_au_info_t));
 
@@ -306,27 +308,19 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     for(int i = 0; i < ofrms.num_frms; i++) {
 
         finfo = &aui.frm_info[i];
-        frm = &ofrms.frm[i];
 
-        if(frm->imgb != NULL && (frm->imgb->w[0] != finfo->w || frm->imgb->h[0] != finfo->h)) {
-            frm->imgb->release(frm->imgb);
-            frm->imgb = NULL;
+        if(apvctx->output_csp == 1) {
+            ofrms.frm[i].imgb = apv_imgb_create(finfo->w, finfo->h, OAPV_CS_SET(OAPV_CF_PLANAR2, 10, 0), avctx);
+        } else {
+            ofrms.frm[i].imgb = apv_imgb_create(finfo->w, finfo->h, finfo->cs, avctx);
         }
 
-        if(frm->imgb == NULL) {
-            if(apvctx->output_csp == 1) {
-                frm->imgb = apv_imgb_create(finfo->w, finfo->h, OAPV_CS_SET(OAPV_CF_PLANAR2, 10, 0), avctx);
-            } else {
-                frm->imgb = apv_imgb_create(finfo->w, finfo->h, finfo->cs, avctx);
-            }
+        if(ofrms.frm[i].imgb == NULL) {
+            av_log(avctx, AV_LOG_ERROR, "cannot allocate image buffer (w:%d, h:%d, cs:%d)\n",
+                    finfo->w, finfo->h, finfo->cs);
 
-            if(frm->imgb == NULL) {
-                av_log(avctx, AV_LOG_ERROR, "cannot allocate image buffer (w:%d, h:%d, cs:%d)\n",
-                        finfo->w, finfo->h, finfo->cs);
-
-                ret = AVERROR_INVALIDDATA;
-                goto end;
-            }
+            ret = AVERROR_INVALIDDATA;
+            goto end;
         }
     }
 
@@ -351,7 +345,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 bs_buf_size, stat.read);
     }
 
-    /* testing of metadata reading */
+    /* Testing of metadata reading */
     if(apvctx->mid) {
         oapvm_payload_t *pld = NULL;   // metadata payload
         int              num_plds = 0; // number of metadata payload
@@ -370,6 +364,9 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             if(OAPV_FAILED(ret)) {
                 av_log(avctx, AV_LOG_ERROR,"failed to read metadata\n");
 
+                if(pld != NULL)
+                    free(pld);
+
                 ret = AVERROR_INVALIDDATA;
                 goto end;
             }
@@ -378,79 +375,81 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             free(pld);
     }
 
+    /* Write decoded frames into AVFrame objects */
     for(int i = 0; i < ofrms.num_frms; i++) {
         frm = &ofrms.frm[i];
-        if(ofrms.num_frms > 0) {
-            if(OAPV_CS_GET_BIT_DEPTH(frm->imgb->cs) != apvctx->output_depth) {
+        if(OAPV_CS_GET_BIT_DEPTH(frm->imgb->cs) != apvctx->output_depth) {
+            if(imgb_w == NULL) {
+                imgb_w = apv_imgb_create(frm->imgb->w[0], frm->imgb->h[0],
+                                        OAPV_CS_SET(OAPV_CS_GET_FORMAT(frm->imgb->cs), apvctx->output_depth, 0), avctx);
                 if(imgb_w == NULL) {
-                    imgb_w = apv_imgb_create(frm->imgb->w[0], frm->imgb->h[0],
-                                            OAPV_CS_SET(OAPV_CS_GET_FORMAT(frm->imgb->cs), apvctx->output_depth, 0), avctx);
-                    if(imgb_w == NULL) {
-                        av_log(avctx, AV_LOG_ERROR,"cannot allocate image buffer (w:%d, h:%d, cs:%d)\n",
-                                frm->imgb->w[0], frm->imgb->h[0], frm->imgb->cs);
+                    av_log(avctx, AV_LOG_ERROR,"cannot allocate image buffer (w:%d, h:%d, cs:%d)\n",
+                            frm->imgb->w[0], frm->imgb->h[0], frm->imgb->cs);
 
-                        ret = AVERROR_INVALIDDATA;
-                        goto end;
-                    }
+                    ret = AVERROR_INVALIDDATA;
+                    goto end;
                 }
-                apv_imgb_cpy(imgb_w, frm->imgb, avctx);
-                imgb_o = imgb_w;
             }
-            else {
-                imgb_o = frm->imgb;
-            }
+            apv_imgb_cpy(imgb_w, frm->imgb, avctx);
 
-            if(apvctx->frames[i] == NULL) {
-                apvctx->frames[i] = av_frame_alloc();
-            }
-            apvctx->num_frames++;
-
-            ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i]);
-            if(ret < 0) {
-                av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
-
-                imgb_o->release(frm->imgb);
-                imgb_o = NULL;
-
-                av_frame_unref(frame);
-
-                goto end;
-            }
-
-            // Use ff_decode_frame_props_from_pkt() to fill frame properties
-            ret = ff_decode_frame_props_from_pkt(avctx, apvctx->frames[i], pkt_fd);
-            if (ret < 0) {
-                av_log(avctx, AV_LOG_ERROR, "ff_decode_frame_props_from_pkt error\n");
-
-                frm->imgb->release(frm->imgb);
-                frm->imgb = NULL;
-
-                goto end;
-            }
-
-            if (pkt_fd->flags & AV_PKT_FLAG_KEY) {
-                apvctx->frames[i]->pict_type = AV_PICTURE_TYPE_I;
-                apvctx->frames[i]->flags |= AV_FRAME_FLAG_KEY;
-            }
-            
-            // apvd_t_pull uses pool of objects of type apv_imgb.
-            // The pool size is equal MAX_PB_SIZE (26), so release object when it is no more needed
-            imgb_o->release(frm->imgb);
-            imgb_o = NULL;
-
-            frm_cnt[i]++;
-
-            ret = av_container_fifo_write(apvctx->output_fifo, apvctx->frames[i], AV_CONTAINER_FIFO_FLAG_REF);
+            imgb_o = imgb_w;
         }
+        else {
+            imgb_o = frm->imgb;
+        }
+
+        if(apvctx->frames[i] == NULL) {
+            apvctx->frames[i] = av_frame_alloc();
+        }
+        
+        /* Copy decoded image into AVFrame object */
+        ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i]);
+        if(ret < 0) {
+            av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
+            av_frame_unref(apvctx->frames[i]);
+
+            if(imgb_o) {
+                imgb_o->release(imgb_o);
+                imgb_o = NULL;
+            }
+
+            goto end;
+        }
+
+        /* Use ff_decode_frame_props_from_pkt() to fill frame properties */
+        ret = ff_decode_frame_props_from_pkt(avctx, apvctx->frames[i], pkt_fd);
+        if (ret < 0) {
+            av_log(avctx, AV_LOG_ERROR, "ff_decode_frame_props_from_pkt error\n");
+            av_frame_unref(apvctx->frames[i]);
+
+            if(imgb_o) {
+                imgb_o->release(imgb_o);
+                imgb_o = NULL;
+            }
+
+            goto end;
+        }
+
+        if (pkt_fd->flags & AV_PKT_FLAG_KEY) {
+            apvctx->frames[i]->pict_type = AV_PICTURE_TYPE_I;
+            apvctx->frames[i]->flags |= AV_FRAME_FLAG_KEY;
+        }
+        
+        if(imgb_o) {
+            imgb_o->release(imgb_o);
+            imgb_o = NULL;
+        }
+
+        apvctx->frames_count++;
+
+        /* Write the AVFrame data to the FIFO */
+        ret = av_container_fifo_write(apvctx->output_fifo, apvctx->frames[i], AV_CONTAINER_FIFO_FLAG_REF);
     }
+    apvctx->total_frames_count += apvctx->frames_count;
+    apvctx->au_count++;
 
 end:
     av_packet_unref(pkt_fd);
-
-    if(imgb_w != NULL) {
-        imgb_w->release(imgb_w);
-        imgb_w = NULL;
-    }
 
     for(int i = 0; i < ofrms.num_frms; i++) {
         if(ofrms.frm[i].imgb != NULL) {
@@ -464,6 +463,7 @@ end:
     return AVERROR(EAGAIN);
 
 do_output:
+    /* Read the next available object from the FIFO into frame */
     if (av_container_fifo_read(apvctx->output_fifo, frame, 0) >= 0) {
         return 0;
     }
