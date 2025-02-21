@@ -59,7 +59,7 @@ jobs:
 
       - name: Build FFmpeg
         run: |         
-          ./configure --extra-libs="-lpthread -lm" --enable-ffplay --enable-libapv
+          ./configure --extra-libs="-lpthread -lm" --enable-ffplay --enable-liboapv
           make -j$(nproc)
           sudo make install
 
