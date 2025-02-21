@@ -8,8 +8,10 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +27,6 @@ jobs:
             build-essential \
             cmake \
             git-core \
-            jq \
             libass-dev \
             libfreetype6-dev \
             libgnutls28-dev \
@@ -46,10 +47,12 @@ jobs:
             yasm \
             zlib1g-dev
 
+          sudo apt-get install -y jq
+
       - name: Fetch and install openAPV dependency
         run: |
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/openapv/openapv/releases/latest)
-          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith(".deb")) | .browser_download_url')
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
+          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url')
           wget $DEB_URL -O openapv.deb
           sudo dpkg -i openapv.deb
           sudo apt-get install -f
