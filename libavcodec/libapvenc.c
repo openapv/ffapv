@@ -344,6 +344,13 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
+    {
+        const AVDictionaryEntry *en = NULL;
+        while (en = av_dict_iterate(apvctx->oapv_params, en)) {
+            av_log(avctx, AV_LOG_WARNING, "-oapv-params not supported yet. Error parsing option '%s = %s'.\n", en->key, en->value);
+        }
+    }
+
     /* create encoder */
     apvctx->id = oapve_create(cdsc, NULL);
     if (apvctx->id == NULL) {
@@ -556,7 +563,7 @@ static const AVOption liboapv_options[] = {
     { "7",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
     { "7.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
 
-    { "band_idc", "band_idc", OFFSET(band_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
+    { "band-idc", "band_idc", OFFSET(band_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
     
     { "q-matrix-c0", "q_matrix_c0 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c0), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
     { "q-matrix-c1", "q_matrix_c1 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c1), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
@@ -566,16 +573,15 @@ static const AVOption liboapv_options[] = {
     { "tile-w-mb", "Width of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "tile-h-mb", "Height of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
+    { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
+
     { "qp-offset-c1", "c1 qp offset (not implemented yet)", OFFSET(qp_c1_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "qp-offset-c2", "c2 qp offset (not implemented yet)", OFFSET(qp_c2_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "qp-offset-c3", "c3 qp offset (not implemented yet)", OFFSET(qp_c3_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
-    { "rc_type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_ABR }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
+    { "rc-type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_ABR }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
     { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
     { "ABR", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_ABR }, INT_MIN, INT_MAX, VE, "rc_type" },
-    
-    { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
-    // { "crf", "Constant rate factor value for CRF rate control mode", OFFSET(crf), AV_OPT_TYPE_INT, { .i64 = 32 }, 10, 49, VE }, // @todo not supported by APV yet
 
     { "hash", "Embed picture signature (HASH) for conformance checking in decoding", OFFSET(hash), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE },
 
