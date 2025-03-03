@@ -213,7 +213,7 @@ External library support:
   --enable-ladspa          enable LADSPA audio filtering [no]
   --enable-lcms2           enable ICC profile support via LittleCMS 2 [no]
   --enable-libaom          enable AV1 video encoding/decoding via libaom [no]
-  --enable-libapv          enable APV encoding/decoding via libapv [no]
+  --enable-liboapv          enable APV encoding/decoding via liboapv [no]
   --enable-libaribb24      enable ARIB text and caption decoding via libaribb24 [no]
   --enable-libaribcaption  enable ARIB text and caption decoding via libaribcaption [no]
   --enable-libass          enable libass subtitles rendering,
@@ -1925,7 +1925,7 @@ EXTERNAL_LIBRARY_LIST="
     ladspa
     lcms2
     libaom
-    libapv
+    liboapv
     libaribcaption
     libass
     libbluray
@@ -3572,8 +3572,8 @@ prores_videotoolbox_encoder_select="videotoolbox_encoder"
 libaom_av1_decoder_deps="libaom"
 libaom_av1_encoder_deps="libaom"
 libaom_av1_encoder_select="extract_extradata_bsf dovi_rpuenc"
-libapv_encoder_deps="libapv"
-libapv_decoder_deps="libapv"
+libapv_encoder_deps="liboapv"
+libapv_decoder_deps="liboapv"
 libaribb24_decoder_deps="libaribb24"
 libaribcaption_decoder_deps="libaribcaption"
 libcelt_decoder_deps="libcelt"
