@@ -36,7 +36,7 @@
 #include "libavutil/avstring.h"
 #include "libavutil/mem.h"
 #include "libavutil/avassert.h"
-
+#include <libavutil/imgutils.h>
 
 #include "avcodec.h"
 #include "internal.h"
@@ -108,6 +108,42 @@ typedef struct ApvEncContext {
     AVDictionary *oapv_params;
 } ApvEncContext;
 
+static int align_to_16(int value) {
+    return (value + 15) & ~15; // Rounding to the nearest value divisible by 16
+}
+
+static AVFrame* copy_and_align_avframe_to_16(const AVFrame* src_frame) {
+    AVFrame* dst_frame = NULL;
+    int ret = 0;
+
+    if (!src_frame) {
+        return NULL;
+    }
+
+    // Allocate a new AVFrame
+    dst_frame = av_frame_alloc();
+    if (!dst_frame) {
+        return NULL;
+    }
+
+    // Set parameters for the new frame
+    dst_frame->format = src_frame->format;
+    dst_frame->width = align_to_16(src_frame->width);
+    dst_frame->height = align_to_16(src_frame->height);
+
+    // Memory allocation for a new frame
+    ret = av_frame_get_buffer(dst_frame, 16);
+    if (ret < 0) {
+        av_frame_free(&dst_frame);
+        return NULL;
+    }
+
+    // Data copying
+    av_frame_copy(dst_frame, src_frame);
+    
+    return dst_frame;
+}
+
 /**
  * Convert FFmpeg pixel format (AVPixelFormat) into APV pre-defined color format
  *
@@ -120,6 +156,15 @@ static int libapve_apv_color_format(enum AVPixelFormat av_pix_fmt)
     int cf = OAPV_CF_UNKNOWN;
 
     switch (av_pix_fmt) {
+    case AV_PIX_FMT_GRAY10:
+        cf = OAPV_CF_YCBCR400;
+        break;
+    case AV_PIX_FMT_GRAY12:
+        cf = OAPV_CF_YCBCR400;
+        break;
+    case AV_PIX_FMT_YUV420P10:
+        cf = OAPV_CF_YCBCR420;
+        break;
     case AV_PIX_FMT_YUV422P10:
         cf = OAPV_CF_YCBCR422;
         break;
@@ -131,6 +176,12 @@ static int libapve_apv_color_format(enum AVPixelFormat av_pix_fmt)
         break;
     case AV_PIX_FMT_YUV444P12:
         cf = OAPV_CF_YCBCR444;
+        break;
+    case AV_PIX_FMT_YUVA444P10:
+        cf = OAPV_CF_YCBCR4444;
+        break;
+    case AV_PIX_FMT_YUVA444P12:
+        cf = OAPV_CF_YCBCR4444;
         break;
     default:
         cf = OAPV_CF_UNKNOWN;
@@ -266,7 +317,8 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         return AVERROR_INVALIDDATA;
     }
 
-    cdsc->max_bs_buf_size = MAX_BS_BUF;
+    cdsc->max_bs_buf_size = MAX_BS_BUF; /* maximum bitstream buffer size */
+    cdsc->max_num_frms = MAX_NUM_FRMS;
 
     return 0;
 }
@@ -321,14 +373,12 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     unsigned char *bs_buf = NULL;
 
     int cfmt;                               // color format
-    const int num_frames = MAX_NUM_FRMS;    // number of frames in an access unit
 
     oapve_cdesc_t *cdsc =  &(apvctx->cdsc);
     int ret = 0;
 
-    int size_bitrate;
-    int value_bitrate;
-
+    memset(cdsc, 0, sizeof(oapve_cdesc_t));
+    
     /* allocate bitstream buffer */
     bs_buf = (unsigned char *)av_malloc(MAX_BS_BUF);
     if (bs_buf == NULL) {
@@ -385,7 +435,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     // create input and reconstruction image buffers
     memset(&apvctx->ifrms, 0, sizeof(oapv_frms_t));
     
-    for(int i = 0; i < num_frames; i++) {
+    for(int i = 0; i < apvctx->num_frames; i++) {
         if(apvctx->input_depth  == 10) {
             apvctx->ifrms.frm[FRM_IDX].imgb = apv_imgb_create(avctx->width, avctx->height, OAPV_CS_SET(cfmt, apvctx->input_depth, 0), avctx);
         }
@@ -428,9 +478,11 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
     }
 
     for (int i = 0; i < apvctx->imgb_i->np; i++) {
-        // @todo FIX-ME : need to set properly in case of multi-frame
-        apvctx->imgb_i->a[i] = frame->data[i];
-        apvctx->imgb_i->s[i] = frame->linesize[i];
+        
+        AVFrame* f = copy_and_align_avframe_to_16(frame);
+
+        apvctx->imgb_i->a[i] = f->data[i];
+        apvctx->imgb_i->s[i] = f->linesize[i];
     }
 
     if(apvctx->input_depth != 10) {
