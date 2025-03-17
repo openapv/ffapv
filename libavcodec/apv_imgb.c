@@ -254,8 +254,6 @@ oapv_imgb_t * apv_imgb_create(int w, int h, int cs, AVCodecContext *avctx)
     imgb->getref = apv_imgb_getref;
     imgb->release = apv_imgb_release;
 
-    imgb->refcnt = 0;
-
     imgb->addref(imgb); /* increase reference count */
     return imgb;
 
