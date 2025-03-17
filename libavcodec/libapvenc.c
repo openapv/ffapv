@@ -109,10 +109,10 @@ typedef struct ApvEncContext {
 } ApvEncContext;
 
 static int align_to_16(int value) {
-    return (value + 15) & ~15; // Zaokrąglenie do najbliższej wartości podzielnej przez 16
+    return (value + 15) & ~15; // Rounding to the nearest value divisible by 16
 }
 
-static AVFrame* copy_yuv422_10bit_avframe(const AVFrame* src_frame) {
+static AVFrame* copy_and_align_avframe_to_16(const AVFrame* src_frame) {
     AVFrame* dst_frame = NULL;
     int ret = 0;
 
@@ -257,7 +257,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     for(int i=0;i<OAPV_MAX_NUM_FRAMES;i++) {
 
         /* initialize apv_param struct with default values */
-        ret = oapve_param_default(&(cdsc->param[i]));
+        ret = oapve_param_default(&cdsc->param[i]);
         if (OAPV_FAILED(ret)) {
             av_log(avctx, AV_LOG_ERROR, "Cannot set default parameter\n");
             return AVERROR_EXTERNAL;
@@ -319,7 +319,6 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 
     cdsc->max_bs_buf_size = MAX_BS_BUF; /* maximum bitstream buffer size */
     cdsc->max_num_frms = MAX_NUM_FRMS;
-    // dsc->threads = 1;
 
     return 0;
 }
@@ -374,7 +373,6 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     unsigned char *bs_buf = NULL;
 
     int cfmt;                               // color format
-    const int num_frames = MAX_NUM_FRMS;    // number of frames in an access unit
 
     oapve_cdesc_t *cdsc =  &(apvctx->cdsc);
     int ret = 0;
@@ -435,7 +433,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     cfmt = libapve_apv_color_format(avctx->pix_fmt);
 
     // create input and reconstruction image buffers
-    memset(&(apvctx->ifrms), 0, sizeof(oapv_frms_t));
+    memset(&apvctx->ifrms, 0, sizeof(oapv_frms_t));
     
     for(int i = 0; i < apvctx->num_frames; i++) {
         if(apvctx->input_depth  == 10) {
@@ -481,7 +479,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
     for (int i = 0; i < apvctx->imgb_i->np; i++) {
         
-        AVFrame* f = copy_yuv422_10bit_avframe(frame);
+        AVFrame* f = copy_and_align_avframe_to_16(frame);
 
         apvctx->imgb_i->a[i] = f->data[i];
         apvctx->imgb_i->s[i] = f->linesize[i];
