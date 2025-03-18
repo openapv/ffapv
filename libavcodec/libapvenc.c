@@ -477,13 +477,30 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
         apvctx->imgb_i = apvctx->imgb_r;
     }
 
+    // The liboapv library requires that the frame size be a multiple of 16
+    AVFrame* tmp_frame = copy_and_align_avframe_to_16(frame);
     for (int i = 0; i < apvctx->imgb_i->np; i++) {
-        
-        AVFrame* f = copy_and_align_avframe_to_16(frame);
-
-        apvctx->imgb_i->a[i] = f->data[i];
-        apvctx->imgb_i->s[i] = f->linesize[i];
+        memcpy(apvctx->imgb_i->a[i], tmp_frame->data[i], tmp_frame->linesize[i]*tmp_frame->height);
     }
+    av_frame_free(&tmp_frame);
+
+    // @todo Possibility of optimization (skipping memory allocation for an additional temporary object of type AVFrame).
+    //
+    // int h_chroma, v_chroma;
+    // int frame_height[4];
+
+    // av_pix_fmt_get_chroma_subsample(frame->format, &h_chroma, &v_chroma);
+
+    // frame_height[0] = frame->height;
+    // frame_height[1] = frame->height / v_chroma;
+    // frame_height[2] = frame->height / v_chroma;
+    // frame_height[3] = 0;
+
+    // for (int i = 0; i < apvctx->imgb_i->np; i++) {
+    //     for(int j=0; j < frame_height[i]; j++) {
+    //         memcpy(apvctx->imgb_i->a[i]+j*apvctx->imgb_i->s[i], frame->data[i]+j*frame->linesize[i], frame->linesize[i]);    
+    //     }
+    // }
 
     if(apvctx->input_depth != 10) {
         apv_imgb_cpy(apvctx->ifrms.frm[FRM_IDX].imgb, apvctx->imgb_i, avctx);
