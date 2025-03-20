@@ -67,7 +67,6 @@ And rate control `-rc-type [ABR(default)/CQP]`  type as well as qp parameter `-q
 ### Other parameters
 
 All the other options provided by the `liboapv` library can be passed using the `oapv-params` parameter in the ffmpeg command.  
-These options can be specified after the `oapv-params` parameter  as a colon-separated list in the format `key=value`.
 
 Please see example below:
 ```
