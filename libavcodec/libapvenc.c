@@ -397,7 +397,13 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     {
         const AVDictionaryEntry *en = NULL;
         while (en = av_dict_iterate(apvctx->oapv_params, en)) {
-            av_log(avctx, AV_LOG_WARNING, "-oapv-params not supported yet. Error parsing option '%s = %s'.\n", en->key, en->value);
+            for(int i=0; i<OAPV_MAX_NUM_FRAMES; i++) {
+                if ((ret = oapve_param_parse(&cdsc->param[i], en->key, en->value)) < 0) {
+                    av_log(avctx, AV_LOG_WARNING,
+                        "Error parsing option '%s = %s'.\n",
+                        en->key, en->value);
+                }
+            }
         }
     }
 
@@ -595,6 +601,9 @@ static const enum AVPixelFormat supported_pixel_formats[] = {
 
 // Consider using following options (./ffmpeg --help encoder=liboapv)
 //
+// Using oapv-params: 
+// ffmpeg -f rawvideo -pix_fmt yuv422p10le -i ${INPUT_FILE} -c:v liboapv -oapv-params "profile=422-10:level=7.1:band=3:preset=medium:width=352:height=288:fps=24:qp=63:bitrate=1M" -f rawvideo ${OUTPUT_FILE}
+//
 static const AVOption liboapv_options[] = {
     { "preset", "Encoding preset for setting encoding speed (optimization level control)", OFFSET(preset_id), AV_OPT_TYPE_INT, { .i64 = OAPV_PRESET_DEFAULT }, OAPV_PRESET_FASTEST, OAPV_PRESET_PLACEBO, VE, .unit = "preset" },
     { "fastest", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_FASTEST },    INT_MIN, INT_MAX, VE, .unit = "preset" },
@@ -634,19 +643,10 @@ static const AVOption liboapv_options[] = {
 
     { "band-idc", "band_idc", OFFSET(band_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
     
-    { "q-matrix-c0", "q_matrix_c0 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c0), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
-    { "q-matrix-c1", "q_matrix_c1 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c1), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
-    { "q-matrix-c2", "q_matrix_c2 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c2), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
-    { "q-matrix-c3", "q_matrix_c3 \"q1 q2 ... q63 q64\" (not implemented yet)", OFFSET(q_matrix_c3), AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, VE },
-
     { "tile-w-mb", "Width of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
     { "tile-h-mb", "Height of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
     { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
-
-    { "qp-offset-c1", "c1 qp offset (not implemented yet)", OFFSET(qp_c1_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
-    { "qp-offset-c2", "c2 qp offset (not implemented yet)", OFFSET(qp_c2_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
-    { "qp-offset-c3", "c3 qp offset (not implemented yet)", OFFSET(qp_c3_offset), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
 
     { "rc-type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_ABR }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
     { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
