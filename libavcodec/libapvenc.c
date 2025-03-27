@@ -302,13 +302,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             return AVERROR_INVALIDDATA;
         }
 
-        if (avctx->thread_count <= 0) {
-            int cpu_count = av_cpu_count();
-            cdsc->threads = (cpu_count < OAPV_MAX_THREADS) ? cpu_count : OAPV_MAX_THREADS;
-        } else if (avctx->thread_count > OAPV_MAX_THREADS)
-            cdsc->threads = OAPV_MAX_THREADS;
-        else
-            cdsc->threads = avctx->thread_count;
+        cdsc->threads = OAPV_CDESC_THREADS_AUTO;
     }
 
     apvctx->input_csp = libapve_apv_color_space(avctx->pix_fmt);
@@ -408,7 +402,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     }
 
     /* create encoder */
-    apvctx->id = oapve_create(cdsc, NULL);
+    apvctx->id = oapve_create(cdsc, &ret);
     if (apvctx->id == NULL) {
         av_log(avctx, AV_LOG_ERROR, "Cannot create OAPV encoder\n");
         return AVERROR_EXTERNAL;
@@ -626,7 +620,7 @@ static const AVOption liboapv_options[] = {
     // @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-overview-of-profiles-levels
     // level_idc MUST be set equal to a value of 30 times the level number specified in Table 4
     //
-    { "level", "level", OFFSET(level_idc), AV_OPT_TYPE_INT, { .i64 = (int)(4.1 * 30) }, 1,  (int)(7.1 * 30), VE, .unit = "level" },
+    { "level", "level", OFFSET(level_idc), AV_OPT_TYPE_INT, { .i64 = (int)((4.1 * 30) + 0.5) }, (int)((1 * 30) + 0.5),  (int)((7.1 * 30) + 0.5), VE, .unit = "level" },
     { "1",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(1 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
     { "1.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(1.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
     { "2",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(2 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
