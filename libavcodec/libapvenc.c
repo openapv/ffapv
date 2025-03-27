@@ -470,6 +470,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
                           const AVFrame *frame, int *got_packet)
 {
     ApvEncContext *apvctx =  avctx->priv_data;
+    AVFrame* tmp_frame = NULL;
     int  ret = -1;
 
     if (frame==NULL) {
@@ -484,7 +485,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
     }
 
     // The liboapv library requires that the frame size be a multiple of 16
-    AVFrame* tmp_frame = copy_and_align_avframe_to_16(frame);
+    tmp_frame = copy_and_align_avframe_to_16(frame);
     for (int i = 0; i < apvctx->imgb_i->np; i++) {
         memcpy(apvctx->imgb_i->a[i], tmp_frame->data[i], tmp_frame->linesize[i]*tmp_frame->height);
     }
