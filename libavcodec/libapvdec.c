@@ -408,11 +408,6 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
             av_frame_unref(apvctx->frames[i]);
 
-            if(imgb_o) {
-                imgb_o->release(imgb_o);
-                imgb_o = NULL;
-            }
-
             goto end;
         }
 
@@ -422,11 +417,6 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             av_log(avctx, AV_LOG_ERROR, "ff_decode_frame_props_from_pkt error\n");
             av_frame_unref(apvctx->frames[i]);
 
-            if(imgb_o) {
-                imgb_o->release(imgb_o);
-                imgb_o = NULL;
-            }
-
             goto end;
         }
 
@@ -435,11 +425,6 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             apvctx->frames[i]->flags |= AV_FRAME_FLAG_KEY;
         }
         
-        if(imgb_o) {
-            imgb_o->release(imgb_o);
-            imgb_o = NULL;
-        }
-
         apvctx->frames_count++;
 
         /* Write the AVFrame data to the FIFO */
@@ -457,6 +442,13 @@ end:
             ofrms.frm[i].imgb = NULL;
         }
     }
+    if (imgb_w) {
+        imgb_w->release(imgb_w);
+        imgb_w = NULL;
+    }
+    
+    imgb_o = NULL;
+
     if (av_container_fifo_can_read(apvctx->output_fifo))
         goto do_output;
 
