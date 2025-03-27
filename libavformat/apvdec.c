@@ -102,6 +102,7 @@ static int apv_annexb_probe(const AVProbeData *p)
     unsigned char *bs = (unsigned char *)p->buf;
     int bs_size = p->buf_size;
     int ret = 0;
+    uint32_t signature;
 
     if (bs_size < APV_PBU_SIZE_PREFIX_LENGTH + APV_AU_SIZE_PREFIX_LENGTH + APV_PBU_HEADER_SIZE)
         return 0;
@@ -112,6 +113,12 @@ static int apv_annexb_probe(const AVProbeData *p)
 
     // skip a four-byte length Access Unit Size syntax element, which indicates the size of the AU in bytes
     skip_bits_long(&gb, 32);
+
+    // A four-character code that identifies the bitstream as an APV AU. The value MUST be 'aPv1' (0x61507631)
+    signature = get_bits_long(&gb, 32);
+    if (signature != 0x61507631) {
+        return 0;
+    }
 
     // skip a four-byte length PBU Size syntax element, which indicates the size of the PBU in bytes
     skip_bits_long(&gb, 32);
@@ -195,7 +202,7 @@ static int apv_annexb_probe(const AVProbeData *p)
         ev.pbu_header.reserved_zer_8bits == 0 && 
         ev.frame_info.reserved_zero_5bits == 0 &&
         ev.frame_info.reserved_zero_8bits == 0 ) {
-        return AVPROBE_SCORE_EXTENSION + 1;  // 1 more than .mpg
+        return AVPROBE_SCORE_MAX;
     }
 
     return 0;
@@ -230,6 +237,7 @@ static int apv_read_header(AVFormatContext *s)
         return 0;
 
     to_read += APV_AU_SIZE_PREFIX_LENGTH;
+    to_read += APV_SIGNATURE_LENGTH;
     to_read += APV_PBU_SIZE_PREFIX_LENGTH;
     to_read += APV_PBU_HEADER_SIZE;
     to_read += APV_FRAME_INFO_SIZE;
@@ -238,6 +246,7 @@ static int apv_read_header(AVFormatContext *s)
         return 0; 
     
     skip_bits_long(&gb, 32); // AU size
+    skip_bits_long(&gb, 32); // signature
     skip_bits_long(&gb, 32); // PBU size
 
     apv_parse_pbu_header(&gb, &pbu_header);
