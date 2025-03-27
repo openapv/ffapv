@@ -169,8 +169,8 @@ typedef struct filler_t {
 typedef struct tile_header_t {
     uint16_t tile_header_size;                  // u(16)
     uint16_t tile_index;                        // u(16)
-    uint32_t tile_data_size[NUM_COMP_MAX];      // u(32) table of size NumComp MAX = 4
-    uint8_t tile_qp[NUM_COMP_MAX];              // u(8) table of size NumComp
+    uint32_t tile_data_size[NUM_COMP_MAX];      // u(32) table of size NumComps MAX = 4
+    uint8_t tile_qp[NUM_COMP_MAX];              // u(8) table of size NumComps
     uint8_t reserved_zero_8bits;                // u(8)
     byte_alignment_t byte_alignment;
 
@@ -626,12 +626,15 @@ int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
 
         if (bytes_to_read < au_size) goto end;
 
+        data += APV_SIGNATURE_LENGTH;
+        bytes_to_read -= APV_SIGNATURE_LENGTH;
+
         // pbu (primitive bitstream units number)
         //
         // @todo We assumed that number_of_configuration_entry is the number of PBUs in the AU. 
         //       I'm not sure if this assumption is correct.
         //       This needs to be figured out.
-        number_of_configuration_entry = apv_number_of_pbu_entry(data, au_size);
+        number_of_configuration_entry = apv_number_of_pbu_entry(data, bytes_to_read);
         if (number_of_configuration_entry <= 0) goto end;
 
         apvc.number_of_configuration_entry = number_of_configuration_entry;
