@@ -169,25 +169,25 @@ int ff_apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *frame_info)
 }
 
 static int num_component(int chroma_format_idc) {
-    int NumComp = 0;
+    int NumComps = 0;
     
     switch (chroma_format_idc)
     {
     case 0:
-        NumComp = 1;
+        NumComps = 1;
         break;
     case 2:
     case 3:
-        NumComp = 3;
+        NumComps = 3;
         break;
     case 4:
-        NumComp = 4;
+        NumComps = 4;
         break;
     
     default:
         break;
     }
-    return NumComp;
+    return NumComps;
 }
 
 static int sub_width_c(int chroma_format_idc) {
@@ -228,7 +228,7 @@ static int apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *pbuh)
 int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *frame_header)
 {
     int ret = 0;
-    int NumComp = APV_COLOR_COMP_NUM;
+    int NumComps = APV_COLOR_COMP_NUM;
 
     ret = ff_apv_parse_frame_info(gb, &frame_header->frame_info);
     
@@ -243,13 +243,13 @@ int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *frame_heade
     
     frame_header->use_q_matrix = get_bits(gb, 1);
 
-    NumComp = num_component(frame_header->frame_info.chroma_format_idc);
-    if(NumComp == 0) {
+    NumComps = num_component(frame_header->frame_info.chroma_format_idc);
+    if(NumComps == 0) {
         return -1;
     }
     
     if(frame_header->use_q_matrix)
-        ret = ff_apv_quantization_matrix(gb, NumComp, &frame_header->quantization_matrix);
+        ret = ff_apv_quantization_matrix(gb, NumComps, &frame_header->quantization_matrix);
 
     ff_apv_tile_info(gb, frame_header, &frame_header->tile_info);
     frame_header->reserved_zero_8bits_2 = get_bits(gb, 8);
@@ -391,16 +391,16 @@ static int macroblock_layer( GetBitContext *gb, const APVFrameDataHeader *fdh, u
 // @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-tile-header
 static int tile_header(GetBitContext *gb,  const APVFrameDataHeader *fdh, APVTileHeader *th)
 {
-    int NumComp = num_component(fdh->frame_info.chroma_format_idc);
+    int NumComps = num_component(fdh->frame_info.chroma_format_idc);
     
     th->tile_header_size = get_bits(gb, 16);
     th->tile_index = get_bits(gb, 16);
     
-    for(int i=0; i<NumComp; i++) {
+    for(int i=0; i<NumComps; i++) {
         th->tile_data_size[i] = get_bits(gb, 32);
     }
     
-    for(int i=0; i<NumComp; i++) {
+    for(int i=0; i<NumComps; i++) {
         th->tile_qp[i] = get_bits(gb, 8);
     }
 
@@ -446,15 +446,15 @@ static int tile_data(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *
 int ff_apv_parse_tile(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *tile, uint8_t tileIdx)
 {
     int ret = 0;
-    int NumComp = num_component(fdh->frame_info.chroma_format_idc);
+    int NumComps = num_component(fdh->frame_info.chroma_format_idc);
 
     tile_header(gb, fdh, &tile->tile_header);
 
-    for(int i=0; i<NumComp; i++) {
+    for(int i=0; i<NumComps; i++) {
         tile_data(gb, fdh, tile, tileIdx, i);
     }
 
-    // @tod check
+    // @todo check
     // while(more_data_in_tile()) {
     //     tile_dummy_byte;
     // }

@@ -27,6 +27,7 @@
 // A four-byte length Frame Data Size syntax element, which indicates the size of the Frame Data in bytes, may precede the Frame Data, depending on the application.
 #define APV_AU_SIZE_PREFIX_LENGTH           (4)  /* byte */
 #define APV_PBU_SIZE_PREFIX_LENGTH          (4)  /* byte */
+#define APV_SIGNATURE_LENGTH                (4)  /* byte */
 
 // @deprecated
 #define APV_FRAME_DATA_SIZE_PREFIX_LENGTH   (4)  /* byte */
