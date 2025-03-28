@@ -69,22 +69,11 @@ typedef struct ApvEncContext {
 
     int num_frames;         // number of frames in an access unit
     
-    int profile_id;         // encoder profile (33,44,55,66,77,88,99)
     int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
-    int level_idc;
-    int band_idc;
-
-    int tune_id;            // tune of apv (psnr, zerolatency)
-
-    // variables for rate control types
-    int rc_type;            // Rate control type [ 0(OFF) / 1(ABR) / 2(CRF) ]
-
+    
     int qp;                 // quantization parameter (QP) [0,51]
-    int crf;                // constant rate factor (CRF) [10,49]
-
+    
     int hash;               // embed picture signature (HASH) for conformance checking in decoding
-
-    int complexity;         // encoder complexity [ 0(no rdo) / 1( enable rdo quantization daed-zone) ]
 
     int input_depth;        // input data bit depth (8, 10)
     int input_csp;          // input data color space (chroma format)
@@ -92,18 +81,6 @@ typedef struct ApvEncContext {
                             //  - 1: YUV420
                             //  - 2: YUV422
                             //  - 3: YUV444
-
-    int qp_c1_offset;
-    int qp_c2_offset;
-    int qp_c3_offset;
-
-    int tile_w_mb;
-    int tile_h_mb;
-
-    char q_matrix_c0[512];
-    char q_matrix_c1[512];
-    char q_matrix_c2[512];
-    char q_matrix_c3[512];
 
     AVDictionary *oapv_params;
 } ApvEncContext;
@@ -277,31 +254,13 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             cdsc->param[i].fps_den = avctx->framerate.den;
         }
 
-        cdsc->param[i].level_idc = avctx->level;
-
-        //if (avctx->rc_buffer_size)   // VBV buf size
-        //    cdsc->param[i].vbv_bufsize = (int)(avctx->rc_buffer_size / 1000);
-
-        cdsc->param[i].rc_type = apvctx->rc_type;
-
         cdsc->param[i].preset = apvctx->preset_id;
-        cdsc->param[i].profile_idc = apvctx->profile_id;
-        cdsc->param[i].level_idc = apvctx->level_idc;
-        cdsc->param[i].band_idc = apvctx->band_idc;
-        
-        if (apvctx->rc_type == OAPV_RC_CQP)
-            cdsc->param[i].qp = apvctx->qp;
-        else if (apvctx->rc_type == OAPV_RC_ABR) {
-            if (avctx->bit_rate / 1000 > INT_MAX || avctx->rc_max_rate / 1000 > INT_MAX) {
-                av_log(avctx, AV_LOG_ERROR, "Not supported bitrate bit_rate and rc_max_rate > %d000\n", INT_MAX);
-                return AVERROR_INVALIDDATA;
-            }
-            cdsc->param[i].bitrate = (int)(avctx->bit_rate / 1000);
-        } else {
-            av_log(avctx, AV_LOG_ERROR, "Not supported rate control type: %d\n", apvctx->rc_type);
+        cdsc->param[i].qp = apvctx->qp;
+        if (avctx->bit_rate / 1000 > INT_MAX || avctx->rc_max_rate / 1000 > INT_MAX) {
+            av_log(avctx, AV_LOG_ERROR, "Not supported bitrate bit_rate and rc_max_rate > %d000\n", INT_MAX);
             return AVERROR_INVALIDDATA;
         }
-
+        cdsc->param[i].bitrate = (int)(avctx->bit_rate / 1000);
         cdsc->threads = OAPV_CDESC_THREADS_AUTO;
     }
 
@@ -608,47 +567,7 @@ static const AVOption liboapv_options[] = {
     { "placebo", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_PLACEBO }, INT_MIN, INT_MAX, VE, .unit = "preset" },
     { "default", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_DEFAULT }, INT_MIN, INT_MAX, VE, .unit = "preset" },
 
-    { "profile", "Encoding profile", OFFSET(profile_id), AV_OPT_TYPE_INT, { .i64 = OAPV_PROFILE_422_10 }, OAPV_PROFILE_422_10,  99, VE, .unit = "profile" },
-    { "422-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PROFILE_422_10 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-    { "422-12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 44 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-    { "444-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 55 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-    { "444-12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 66 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-    { "4444-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 77 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-    { "4444-12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 88 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-    { "400-10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 99 }, INT_MIN, INT_MAX, VE, .unit = "profile" },
-
-    // @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-overview-of-profiles-levels
-    // level_idc MUST be set equal to a value of 30 times the level number specified in Table 4
-    //
-    { "level", "level", OFFSET(level_idc), AV_OPT_TYPE_INT, { .i64 = (int)((4.1 * 30) + 0.5) }, (int)((1 * 30) + 0.5),  (int)((7.1 * 30) + 0.5), VE, .unit = "level" },
-    { "1",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(1 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "1.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(1.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "2",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(2 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "2.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(2.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "3",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(3 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "3.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(3.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "4",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(4 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "4.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(4.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "5",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(5 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "5.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(5.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "6",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(6 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "6.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(6.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "7",   NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7 * 30) },   INT_MIN, INT_MAX, VE, .unit = "level" },
-    { "7.1", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = (int)(7.1 * 30) }, INT_MIN, INT_MAX, VE, .unit = "level" },
-
-    { "band-idc", "band_idc", OFFSET(band_idc), AV_OPT_TYPE_INT, { .i64 = 2 }, 0, 3, VE },
-    
-    { "tile-w-mb", "Width of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
-    { "tile-h-mb", "Height of tile in units of MBs", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 0 }, INT_MIN, INT_MAX, VE },
-
     { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 51, VE },
-
-    { "rc-type", "Rate control type", OFFSET(rc_type), AV_OPT_TYPE_INT, { .i64 = OAPV_RC_ABR }, OAPV_RC_CQP,  OAPV_RC_ABR , VE, "rc_type" },
-    { "CQP", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_CQP }, INT_MIN, INT_MAX, VE, "rc_type" },
-    { "ABR", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_RC_ABR }, INT_MIN, INT_MAX, VE, "rc_type" },
-
-    { "hash", "Embed picture signature (HASH) for conformance checking in decoding", OFFSET(hash), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE },
-
     { "oapv-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(oapv_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE },
     { NULL }
 };
