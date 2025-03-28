@@ -72,8 +72,6 @@ typedef struct ApvEncContext {
     int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
     
     int qp;                 // quantization parameter (QP) [0,51]
-    
-    int hash;               // embed picture signature (HASH) for conformance checking in decoding
 
     int input_depth;        // input data bit depth (8, 10)
     int input_csp;          // input data color space (chroma format)
@@ -276,33 +274,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     return 0;
 }
 
-/**
- * Set OAPV_CFG_SET_USE_FRM_HASH for encoder
- *
- * @param[in] logger context
- * @param[in] id APV encodec instance identifier
- * @param[in] ctx the structure stores all the states associated with the instance of APV encoder
- *
- * @return 0 on success, negative error code on failure
- */
-static int set_extra_config(AVCodecContext *avctx, oapvd_t id, ApvEncContext *ctx)
-{
-    int ret = 0, size, value;
-
-    if(ctx->hash) {
-        size = 4;
-        value = 1;
-        ret = oapve_config(id, OAPV_CFG_SET_USE_FRM_HASH, &value, &size);
-        if (OAPV_FAILED(ret)) {
-            av_log(avctx, AV_LOG_ERROR, "Failed to set config for using frame hash\n");
-            return AVERROR_EXTERNAL;
-        }
-    }
-
-    return ret;
-}
-
- static int get_bit_depth(AVCodecContext *avctx, enum AVPixelFormat pixel_format)
+static int get_bit_depth(AVCodecContext *avctx, enum AVPixelFormat pixel_format)
  {
      const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pixel_format);
      if (desc == NULL) {
@@ -372,11 +344,6 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     if(apvctx->mid == NULL || OAPV_FAILED(ret)) {
         av_log(avctx, AV_LOG_ERROR, "cannot create OAPV metadata handler\n");
         return AVERROR_EXTERNAL;
-    }
-
-    if ((ret = set_extra_config(avctx, apvctx->id, apvctx)) != 0) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot set extra configuration\n");
-        return AVERROR(EINVAL);
     }
 
     apvctx->input_depth = get_bit_depth(avctx, avctx->pix_fmt);
