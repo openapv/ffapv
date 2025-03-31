@@ -682,8 +682,7 @@ int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
                     apvc.configuration_entry[i].frame_info[j].transfer_characteristics = pbu.frame.frame_header.transfer_characteristics;
                     apvc.configuration_entry[i].frame_info[j].matrix_coefficients = pbu.frame.frame_header.matrix_coefficients;
 
-                    // @todo Figure out what value the field should have if number_of_frame_info is different from 1.
-                    apvc.configuration_entry[i].frame_info[j].full_range_flag = (number_of_frame_info == 1) ? 1 : 0;
+                    apvc.configuration_entry[i].frame_info[j].full_range_flag = pbu.frame.frame_header.full_range_flag;
                     apvc.configuration_entry[i].frame_info[j].reserved_zero_7bits = 0;
                 }
             }
