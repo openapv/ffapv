@@ -52,8 +52,8 @@ jobs:
       - name: Fetch and install openAPV dependency
         run: |
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
-          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
-          wget $DEB_URL -O openapv.deb
+          DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
+          wget $DEPENDENCY_URL -O openapv.deb
           sudo dpkg -i openapv.deb
           sudo apt-get install -f
 
@@ -110,10 +110,9 @@ jobs:
       - name: Fetch and install openAPV dependency
         run: |
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
-          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
-          wget $DEB_URL -O openapv.deb
-          sudo dpkg -i openapv.deb
-          sudo apt-get install -f
+          DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("win64.zip")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
+          wget $DEPENDENCY_URL -O openapv.zip
+          unzip filename.zip -d /openapv
 
       - name: Build FFmpeg
         run: |
