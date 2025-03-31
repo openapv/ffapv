@@ -52,7 +52,7 @@ jobs:
       - name: Fetch and install openAPV dependency
         run: |
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
-          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url')
+          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
           wget $DEB_URL -O openapv.deb
           sudo dpkg -i openapv.deb
           sudo apt-get install -f
@@ -67,4 +67,57 @@ jobs:
         run: |
           oapv_app_enc
           ffmpeg -version
+
+  build-windows:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            build-essential \
+            cmake \
+            git-core \
+            libass-dev \
+            libfreetype6-dev \
+            libgnutls28-dev \
+            libmp3lame-dev \
+            libsdl2-dev \
+            libtool \
+            libva-dev \
+            libvdpau-dev \
+            libvorbis-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            libxcb-xfixes0-dev \
+            meson \
+            ninja-build \
+            pkg-config \
+            texinfo \
+            wget \
+            nasm \
+            zlib1g-dev
+
+          sudo apt-get install -y jq
+
+      - name: Fetch and install openAPV dependency
+        run: |
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
+          DEB_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
+          wget $DEB_URL -O openapv.deb
+          sudo dpkg -i openapv.deb
+          sudo apt-get install -f
+
+      - name: Build FFmpeg
+        run: |
+          ./configure --target-os=mingw32 --arch=x86_64 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- --enable-shared  \
+          --enable-gpl --enable-nonfree --enable-sdl2 --enable-ffplay --enable-liboapv 
+          make -j$(nproc)
+          
           
