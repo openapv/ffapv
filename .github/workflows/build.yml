@@ -104,7 +104,8 @@ jobs:
             nasm \
             zlib1g-dev
 
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq \
+            mingw-w64
 
       - name: Fetch and install openAPV dependency
         run: |
