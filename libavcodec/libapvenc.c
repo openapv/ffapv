@@ -372,6 +372,12 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         apvctx->ifrms.num_frms++;
     }
 
+    // @notice openapv supports multiple frame 
+    avctx->color_range = cdsc->param[0].full_range_flag;
+    avctx->color_primaries = cdsc->param[0].color_primaries;
+    avctx->color_trc = cdsc->param[0].transfer_characteristics;
+    avctx->colorspace = cdsc->param[0].matrix_coefficients;
+
     return 0;
 }
 
