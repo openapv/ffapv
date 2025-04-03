@@ -260,6 +260,18 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         }
         cdsc->param[i].bitrate = (int)(avctx->bit_rate / 1000);
         cdsc->threads = OAPV_CDESC_THREADS_AUTO;
+
+        if(avctx->color_primaries!=AVCOL_PRI_UNSPECIFIED)
+            cdsc->param[i].color_primaries = avctx->color_primaries;
+        
+        if(avctx->color_trc!=AVCOL_TRC_UNSPECIFIED)
+            cdsc->param[i].transfer_characteristics = avctx->color_trc;
+
+        if(avctx->colorspace!=AVCOL_SPC_UNSPECIFIED)    
+            cdsc->param[i].matrix_coefficients = avctx->colorspace;
+
+        if(avctx->color_range!=AVCOL_RANGE_UNSPECIFIED)    
+            cdsc->param[i].full_range_flag = (avctx->color_range==AVCOL_RANGE_JPEG)?1:0;
     }
 
     apvctx->input_csp = libapve_apv_color_space(avctx->pix_fmt);
@@ -371,7 +383,15 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         }
         apvctx->ifrms.num_frms++;
     }
-
+    
+     /* color description values */
+    if(cdsc->param[FRM_IDX].color_description_present_flag) {
+        avctx->color_primaries = cdsc->param[FRM_IDX].color_primaries;   
+        avctx->color_trc = cdsc->param[FRM_IDX].transfer_characteristics;
+        avctx->colorspace = cdsc->param[FRM_IDX].matrix_coefficients;
+        avctx->color_range = (cdsc->param[FRM_IDX].full_range_flag)?AVCOL_RANGE_JPEG:AVCOL_RANGE_MPEG;
+    }
+        
     return 0;
 }
 
