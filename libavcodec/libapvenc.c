@@ -384,14 +384,14 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         apvctx->ifrms.num_frms++;
     }
     
-     /* color description values */
+    /* color description values */
     if(cdsc->param[FRM_IDX].color_description_present_flag) {
         avctx->color_primaries = cdsc->param[FRM_IDX].color_primaries;   
         avctx->color_trc = cdsc->param[FRM_IDX].transfer_characteristics;
         avctx->colorspace = cdsc->param[FRM_IDX].matrix_coefficients;
         avctx->color_range = (cdsc->param[FRM_IDX].full_range_flag)?AVCOL_RANGE_JPEG:AVCOL_RANGE_MPEG;
     }
-        
+
     return 0;
 }
 
