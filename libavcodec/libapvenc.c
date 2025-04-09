@@ -239,13 +239,8 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         av_opt_get_int(avctx->priv_data, option_name, 0, &default_value);
 
         if (default_value) {
-            av_log(avctx, AV_LOG_ERROR, "Default value for option '%s': %ld\n", option_name, default_value);
             qp_default_value = (uint8_t)default_value;
-        } else {
-            av_log(avctx, AV_LOG_DEBUG, "No default value for option '%s'.\n", option_name);
         }
-    } else {
-        av_log(avctx, AV_LOG_DEBUG, "Option '%s' not found.\n", option_name);
     }
 
     for(int i=0;i<OAPV_MAX_NUM_FRAMES;i++) {
@@ -284,8 +279,6 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
                                               "If the bitrate is set, the rate control type is set to ABR, which means that the QP value is ignored.\n");
             }
             cdsc->param[i].rc_type = OAPV_RC_ABR;
-        } else {
-            cdsc->param[i].rc_type = OAPV_RC_CQP;
         }
 
         cdsc->threads = OAPV_CDESC_THREADS_AUTO;
