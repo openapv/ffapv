@@ -227,7 +227,26 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     ApvEncContext *apvctx = NULL;
     int ret;
 
+    const char *option_name = "qp";
+    uint8_t qp_default_value = 0;
+    const AVOption *option = NULL;
+    
     apvctx = avctx->priv_data;
+    option = av_opt_find(&apvctx->class, option_name, NULL, 0, 0);
+
+    if (option) {
+        uint64_t default_value;
+        av_opt_get_int(avctx->priv_data, option_name, 0, &default_value);
+
+        if (default_value) {
+            av_log(avctx, AV_LOG_ERROR, "Default value for option '%s': %ld\n", option_name, default_value);
+            qp_default_value = (uint8_t)default_value;
+        } else {
+            av_log(avctx, AV_LOG_DEBUG, "No default value for option '%s'.\n", option_name);
+        }
+    } else {
+        av_log(avctx, AV_LOG_DEBUG, "Option '%s' not found.\n", option_name);
+    }
 
     for(int i=0;i<OAPV_MAX_NUM_FRAMES;i++) {
 
@@ -259,6 +278,16 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             return AVERROR_INVALIDDATA;
         }
         cdsc->param[i].bitrate = (int)(avctx->bit_rate / 1000);
+        if(cdsc->param[i].bitrate) {
+            if(cdsc->param[i].qp!=qp_default_value) {
+                av_log(avctx, AV_LOG_WARNING, "You cannot set both the bitrate and the QP parameter at the same time.\n"
+                                              "If the bitrate is set, the rate control type is set to ABR, which means that the QP value is ignored.\n");
+            }
+            cdsc->param[i].rc_type = OAPV_RC_ABR;
+        } else {
+            cdsc->param[i].rc_type = OAPV_RC_CQP;
+        }
+
         cdsc->threads = OAPV_CDESC_THREADS_AUTO;
 
         if(avctx->color_primaries!=AVCOL_PRI_UNSPECIFIED)
