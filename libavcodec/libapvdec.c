@@ -120,24 +120,48 @@ static int export_stream_params(const oapv_au_info_t* aui, AVCodecContext *avctx
     avctx->height = aui->frm_info->h;
 
     switch(aui->frm_info->cs) {
-    case OAPV_CS_YCBCR422_10LE:
-        avctx->pix_fmt = AV_PIX_FMT_YUV422P10;
-        break;
-    case OAPV_CS_YCBCR444_10LE:
-        avctx->pix_fmt = AV_PIX_FMT_YUV444P10;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 0):
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 0):  // profile 33
         avctx->pix_fmt = AV_PIX_FMT_YUV422P10LE;
         break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 0):
-        avctx->pix_fmt = AV_PIX_FMT_YUV444P10LE;
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 1):
+        avctx->pix_fmt = AV_PIX_FMT_YUV422P10BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 0):  // profile 44
+        avctx->pix_fmt = AV_PIX_FMT_YUV422P12LE;
         break;
     case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 1):
         avctx->pix_fmt = AV_PIX_FMT_YUV422P12BE;
         break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 0):  // profile 55
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 1):
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P10BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 0):   // profile 66
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P12LE;
+        break;
     case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 1):
         avctx->pix_fmt = AV_PIX_FMT_YUV444P12BE;
         break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 0):  // profile 77
+        avctx->pix_fmt = AV_PIX_FMT_YUVA444P10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 1):
+        avctx->pix_fmt = AV_PIX_FMT_YUVA444P10BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 0):  // profile 88
+        avctx->pix_fmt = AV_PIX_FMT_YUVA444P12LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 1):
+        avctx->pix_fmt = AV_PIX_FMT_YUVA444P12BE;
+        break;        
+    case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 0):   // profile 99
+        avctx->pix_fmt = AV_PIX_FMT_GRAY10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1):
+        avctx->pix_fmt = AV_PIX_FMT_GRAY10BE;
+        break;    
     default:
         av_log(avctx, AV_LOG_ERROR, "Unknown color space\n");
         avctx->pix_fmt = AV_PIX_FMT_NONE;
@@ -158,9 +182,24 @@ static int export_stream_params(const oapv_au_info_t* aui, AVCodecContext *avctx
 static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, struct AVFrame *frame)
 {
     int ret;
-    if (imgb->cs != OAPV_CS_YCBCR422_10LE) {
-        av_log(avctx, AV_LOG_ERROR, "Not supported pixel format: %s\n", av_get_pix_fmt_name(avctx->pix_fmt));
-        return AVERROR_INVALIDDATA;
+
+    if (imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 0)  && // profile 33
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 1)  && // profile 33 
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 0)  && // profile 44
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 1)  && // profile 44
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 0)  && // profile 55
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 1)  && // profile 55
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 0)  && // profile 66
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 1)  && // profile 66
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 0) && // profile 77
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 1) && // profile 77
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 0) && // profile 88
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 1) && // profile 88
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 0)  && // profile 99
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1)) {  // profile 99 
+            av_log(avctx, AV_LOG_ERROR, "Not supported pixel format: %s\n", av_get_pix_fmt_name(avctx->pix_fmt));
+            
+            return AVERROR_INVALIDDATA;
     }
 
     if (imgb->w[0] != avctx->width || imgb->h[0] != avctx->height) { // stream resolution changed
