@@ -60,4 +60,37 @@ static inline uint32_t apv_read_au_size(const uint8_t *bits, int bits_size)
 int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
                        int size, int ps_array_completeness);
 
+/**
+ * @brief Creates and allocates memory for an APV decoder configuration record.
+ *
+ * This function allocates memory for an APVDecoderConfigurationRecord and
+ * initializes it. The size of the record is returned through the `size` parameter.
+ *
+ * @param data Pointer to a pointer where the allocated data will be stored.
+ * @param size Pointer to an integer where the size of the allocated record will be stored.
+ * @return 0 on success, or AVERROR_INVALIDDATA if memory allocation fails.
+ */
+int ff_isom_create_apv_dconf_record(uint8_t **data, int *size);
+
+/**
+ * @brief Frees the memory allocated for the APV decoder configuration record.
+ * 
+ * @param data data to be freed
+ */
+void ff_isom_free_apv_dconf_record(uint8_t **data);
+
+/**
+ * @brief Fills an APV decoder configuration record with data.
+ *
+ * This function populates the APVDecoderConfigurationRecord pointed to by
+ * `apvdcr` with the data from `data`, which has a specified size. The data
+ * represents an access unit.
+ *
+ * @param apvdcr Pointer to the APVDecoderConfigurationRecord to be filled.
+ * @param data Pointer to the data to fill the record with.
+ * @param size Size of the data to be copied into the record.
+ * @return 0 on success, or a negative value on error.
+ */
+int ff_isom_fill_apv_dconf_record(const uint8_t *apvc, const uint8_t *data, int size);
+
 #endif // AVFORMAT_APV_H
