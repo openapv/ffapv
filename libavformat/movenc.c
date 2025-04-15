@@ -6691,7 +6691,6 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
          par->codec_id == AV_CODEC_ID_VVC ||
          par->codec_id == AV_CODEC_ID_VP9 ||
          par->codec_id == AV_CODEC_ID_EVC ||
-         par->codec_id == AV_CODEC_ID_APV ||
          par->codec_id == AV_CODEC_ID_TRUEHD) && !trk->vos_len &&
          !TAG_IS_AVCI(trk->tag)) {
         /* copy frame to create needed atoms */
@@ -6703,6 +6702,18 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
         }
         memcpy(trk->vos_data, pkt->data, size);
         memset(trk->vos_data + size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+    }
+
+    if (par->codec_id == AV_CODEC_ID_APV && !trk->vos_len) {
+            ret = ff_isom_create_apv_dconf_record(&trk->vos_data, &trk->vos_len);
+            if (!trk->vos_data) {
+                ret = AVERROR(ENOMEM);
+                goto err;
+            }
+    }
+    
+    if (par->codec_id == AV_CODEC_ID_APV && trk->vos_len) {
+        ret = ff_isom_fill_apv_dconf_record(trk->vos_data, pkt->data, size);
     }
 
     if (par->codec_id == AV_CODEC_ID_AAC && pkt->size > 2 &&
