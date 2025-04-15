@@ -623,11 +623,6 @@ int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
         /* We can't write a valid apvC from the provided data */
         return AVERROR_INVALIDDATA;
     }
-    // } else if (*data == 1) {
-    //     /* Data is already apvC-formatted */
-    //     avio_write(pb, data, size);
-    //     return 0;
-    // }
 
     if(size!=sizeof(APVDecoderConfigurationRecord)) return -1;
     ret = apvc_write(pb, apvc);
