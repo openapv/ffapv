@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+ #include <stdbool.h>
+
 #include "libavutil/intreadwrite.h"
 #include "libavutil/mem.h"
 
@@ -39,6 +41,30 @@
 
 #define MB_WIDTH    16
 #define MB_HEIGHT   16
+
+/*****************************************************************************
+ * PBU types
+ *****************************************************************************/
+#define APV_PBU_TYPE_RESERVED          (0)
+#define APV_PBU_TYPE_PRIMARY_FRAME     (1)
+#define APV_PBU_TYPE_NON_PRIMARY_FRAME (2)
+#define APV_PBU_TYPE_PREVIEW_FRAME     (25)
+#define APV_PBU_TYPE_DEPTH_FRAME       (26)
+#define APV_PBU_TYPE_ALPHA_FRAME       (27)
+#define APV_PBU_TYPE_AU_INFO           (65)
+#define APV_PBU_TYPE_METADATA          (66)
+#define APV_PBU_TYPE_FILLER            (67)
+#define APV_PBU_TYPE_UNKNOWN           (-1)
+#define APV_PBU_NUMS                   (10)
+
+#define APV_FRAME_TYPE_PRIMARY_FRAME     (0)
+#define APV_FRAME_TYPE_NON_PRIMARY_FRAME (1)
+#define APV_FRAME_TYPE_PREVIEW_FRAME     (2)
+#define APV_FRAME_TYPE_DEPTH_FRAME       (3)
+#define APV_FRAME_TYPE_ALPHA_FRAME       (4)
+#define APV_FRAME_TYPE_NON_FRAME         (-1)
+#define APV_PBU_FRAME_TYPE_NUM           (5)
+#define CONFIGURATIONS_MAX                         (APV_PBU_FRAME_TYPE_NUM)
 
 typedef struct APVDecoderFrameInfo {
     uint8_t reserved_zero_6bits;                    // 6 bits
@@ -74,7 +100,7 @@ typedef struct APVDecoderConfigurationEntry {
     uint8_t pbu_type;                   // 8 bits
     uint8_t number_of_frame_info;       // 8 bits
 
-    APVDecoderFrameInfo* frame_info;    // table of size number_of_frame_info
+    APVDecoderFrameInfo** frame_info;   // An array of size number_of_frame_info storing elements of type APVDecoderFrameInfo*
 
 } APVDecoderConfigurationEntry;
 
@@ -84,7 +110,7 @@ typedef struct APVDecoderConfigurationRecord  {
     uint8_t configurationVersion;           // 8 bits
     uint8_t number_of_configuration_entry;  // 8 bits
 
-    APVDecoderConfigurationEntry *configuration_entry; // table of size number_of_configuration_entry
+    APVDecoderConfigurationEntry configuration_entry[CONFIGURATIONS_MAX]; // table of size number_of_configuration_entry
 
 } APVDecoderConfigurationRecord ;
 
@@ -450,16 +476,16 @@ static void apvc_init(APVDecoderConfigurationRecord * apvc)
     apvc->configurationVersion = 1;
 }
 
-static void apvc_close(APVDecoderConfigurationRecord * apvc)
+static void apvc_close(APVDecoderConfigurationRecord *apvc)
 {
     for(int i=0;i<apvc->number_of_configuration_entry;i++) {
-
+        for(int j=0;j<apvc->configuration_entry[i].number_of_frame_info;j++) {
+            free(apvc->configuration_entry[i].frame_info[j]);
+        } 
         free(apvc->configuration_entry[i].frame_info);
-        apvc->configuration_entry[i].frame_info = NULL;
+        apvc->configuration_entry[i].number_of_frame_info = 0;
     }
-
-    free(apvc->configuration_entry);
-    apvc->configuration_entry = NULL;
+    apvc->number_of_configuration_entry = 0;
 }
 
 static int apvc_write(AVIOContext *pb, APVDecoderConfigurationRecord * apvc)
@@ -479,48 +505,48 @@ static int apvc_write(AVIOContext *pb, APVDecoderConfigurationRecord * apvc)
 
         for(int j=0; j < apvc->configuration_entry[i].number_of_frame_info; j++) {
             av_log(NULL, AV_LOG_TRACE, "color_description_present_flag:         %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].color_description_present_flag);
+            apvc->configuration_entry[i].frame_info[j]->color_description_present_flag);
 
             av_log(NULL, AV_LOG_TRACE, "capture_time_distance_ignored:          %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].capture_time_distance_ignored);
+            apvc->configuration_entry[i].frame_info[j]->capture_time_distance_ignored);
 
             av_log(NULL, AV_LOG_TRACE, "profile_idc:                            %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].profile_idc);
+            apvc->configuration_entry[i].frame_info[j]->profile_idc);
 
             av_log(NULL, AV_LOG_TRACE, "level_idc:                              %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].level_idc);
+            apvc->configuration_entry[i].frame_info[j]->level_idc);
 
             av_log(NULL, AV_LOG_TRACE, "band_idc:                               %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].band_idc);
+            apvc->configuration_entry[i].frame_info[j]->band_idc);
 
             av_log(NULL, AV_LOG_TRACE, "frame_width:                            %"PRIu32"\n", 
-            apvc->configuration_entry[i].frame_info[j].frame_width);
+            apvc->configuration_entry[i].frame_info[j]->frame_width);
 
             av_log(NULL, AV_LOG_TRACE, "frame_height:                           %"PRIu32"\n", 
-            apvc->configuration_entry[i].frame_info[j].frame_height);
+            apvc->configuration_entry[i].frame_info[j]->frame_height);
 
             av_log(NULL, AV_LOG_TRACE, "chroma_format_idc:                      %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].chroma_format_idc);
+            apvc->configuration_entry[i].frame_info[j]->chroma_format_idc);
 
             av_log(NULL, AV_LOG_TRACE, "bit_depth_minus8:                       %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].bit_depth_minus8);
+            apvc->configuration_entry[i].frame_info[j]->bit_depth_minus8);
 
             av_log(NULL, AV_LOG_TRACE, "capture_time_distance:                  %"PRIu8"\n", 
-            apvc->configuration_entry[i].frame_info[j].capture_time_distance);
+            apvc->configuration_entry[i].frame_info[j]->capture_time_distance);
 
-            if(apvc->configuration_entry[i].frame_info[j].color_description_present_flag) {
+            if(apvc->configuration_entry[i].frame_info[j]->color_description_present_flag) {
           
                 av_log(NULL, AV_LOG_TRACE, "color_primaries:                    %"PRIu8"\n", 
-                apvc->configuration_entry[i].frame_info[j].color_primaries);
+                apvc->configuration_entry[i].frame_info[j]->color_primaries);
                 
                 av_log(NULL, AV_LOG_TRACE, "transfer_characteristics:           %"PRIu8"\n", 
-                apvc->configuration_entry[i].frame_info[j].transfer_characteristics);
+                apvc->configuration_entry[i].frame_info[j]->transfer_characteristics);
                 
                 av_log(NULL, AV_LOG_TRACE, "matrix_coefficients:                %"PRIu8"\n", 
-                apvc->configuration_entry[i].frame_info[j].matrix_coefficients);
+                apvc->configuration_entry[i].frame_info[j]->matrix_coefficients);
 
                 av_log(NULL, AV_LOG_TRACE, "full_range_flag:                    %"PRIu8"\n", 
-                apvc->configuration_entry[i].frame_info[j].full_range_flag);
+                apvc->configuration_entry[i].frame_info[j]->full_range_flag);
             }
 
         }
@@ -541,45 +567,45 @@ static int apvc_write(AVIOContext *pb, APVDecoderConfigurationRecord * apvc)
             * unsigned int(1) color_description_present_flag
             * unsigned int(1) capture_time_distance_ignored
             */
-            avio_w8(pb, apvc->configuration_entry[i].frame_info[j].reserved_zero_6bits << 2 |
-                        apvc->configuration_entry[i].frame_info[j].color_description_present_flag << 1 | 
-                        apvc->configuration_entry[i].frame_info[j].capture_time_distance_ignored);
+            avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->reserved_zero_6bits << 2 |
+                        apvc->configuration_entry[i].frame_info[j]->color_description_present_flag << 1 | 
+                        apvc->configuration_entry[i].frame_info[j]->capture_time_distance_ignored);
             
             /* unsigned int(8) profile_idc */
-            avio_w8(pb, apvc->configuration_entry[i].frame_info[j].profile_idc);
+            avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->profile_idc);
 
             /* unsigned int(8) level_idc */
-            avio_w8(pb, apvc->configuration_entry[i].frame_info[j].level_idc);
+            avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->level_idc);
 
             /* unsigned int(8) band_idc */
-            avio_w8(pb, apvc->configuration_entry[i].frame_info[j].band_idc);
+            avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->band_idc);
             
             /* unsigned int(32) frame_width_minus1 */
-            avio_wb32(pb, apvc->configuration_entry[i].frame_info[j].frame_width);
+            avio_wb32(pb, apvc->configuration_entry[i].frame_info[j]->frame_width);
 
             /* unsigned int(32) frame_height_minus1 */
-            avio_wb32(pb, apvc->configuration_entry[i].frame_info[j].frame_height);
+            avio_wb32(pb, apvc->configuration_entry[i].frame_info[j]->frame_height);
 
             /* unsigned int(4) chroma_format_idc */
             /* unsigned int(4) bit_depth_minus8 */
-            avio_w8(pb, apvc->configuration_entry[i].frame_info[j].chroma_format_idc << 4 | apvc->configuration_entry[i].frame_info[j].bit_depth_minus8);
+            avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->chroma_format_idc << 4 | apvc->configuration_entry[i].frame_info[j]->bit_depth_minus8);
 
             /* unsigned int(8) capture_time_distance */
-            avio_w8(pb, apvc->configuration_entry[i].frame_info[j].capture_time_distance);
+            avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->capture_time_distance);
 
-            if(apvc->configuration_entry[i].frame_info[j].color_description_present_flag) {
+            if(apvc->configuration_entry[i].frame_info[j]->color_description_present_flag) {
                 /* unsigned int(8) color_primaries */
-                avio_w8(pb, apvc->configuration_entry[i].frame_info[j].color_primaries);
+                avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->color_primaries);
                 
                 /* unsigned int(8) transfer_characteristics */
-                avio_w8(pb, apvc->configuration_entry[i].frame_info[j].transfer_characteristics);
+                avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->transfer_characteristics);
 
                 /* unsigned int(8) matrix_coefficients */
-                avio_w8(pb, apvc->configuration_entry[i].frame_info[j].matrix_coefficients);
+                avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->matrix_coefficients);
 
                 /* unsigned int(1) full_range_flag */
-                avio_w8(pb, apvc->configuration_entry[i].frame_info[j].full_range_flag << 7 |
-                            apvc->configuration_entry[i].frame_info[j].reserved_zero_7bits);
+                avio_w8(pb, apvc->configuration_entry[i].frame_info[j]->full_range_flag << 7 |
+                            apvc->configuration_entry[i].frame_info[j]->reserved_zero_7bits);
             }
         }
     }
@@ -590,110 +616,212 @@ static int apvc_write(AVIOContext *pb, APVDecoderConfigurationRecord * apvc)
 int ff_isom_write_apvc(AVIOContext *pb, const uint8_t *data,
                        int size, int ps_array_completeness)
 {
-    APVDecoderConfigurationRecord  apvc;
-    uint32_t au_size = 0;
-    uint32_t number_of_configuration_entry = 0;
-
-    // @todo Figure out where to get number_of_frame_info from.
-    //       The documentation https://github.com/openapv/openapv/blob/main/readme/apv_isobmff.md 
-    //       does not explain this in a clear and understandable way.
-    //
-    uint32_t number_of_frame_info = 1;
-
-    int bytes_to_read = size;
-
+    APVDecoderConfigurationRecord *apvc = (APVDecoderConfigurationRecord *)data;
     int ret = 0;
-
+    
     if (size < 8) {
         /* We can't write a valid apvC from the provided data */
         return AVERROR_INVALIDDATA;
-    } else if (*data == 1) {
-        /* Data is already apvC-formatted */
-        avio_write(pb, data, size);
-        return 0;
     }
 
-    apvc_init(&apvc);
+    if(size!=sizeof(APVDecoderConfigurationRecord)) return -1;
+    ret = apvc_write(pb, apvc);
 
-    // @deprecated
-    // @todo reimplemntation is needed
+    apvc_close(apvc);
+    return ret;
+}
+
+static int apv_add_frameinfo(APVDecoderConfigurationEntry *configuration_entry, APVDecoderFrameInfo *frame_info) {
+    APVDecoderFrameInfo **temp = NULL;
+    if(configuration_entry->number_of_frame_info == 0) {
+        temp = (APVDecoderFrameInfo **)malloc(sizeof(APVDecoderFrameInfo*));
+        if (temp == NULL) {
+            return AVERROR_INVALIDDATA;
+        }
+    } else {
+        temp = (APVDecoderFrameInfo **)realloc(configuration_entry->frame_info, (configuration_entry->number_of_frame_info + 1) * sizeof(APVDecoderFrameInfo*));
+        if (temp == NULL) {
+            return AVERROR_INVALIDDATA;
+        }
+    }
+    
+    temp[configuration_entry->number_of_frame_info] = (APVDecoderFrameInfo*)malloc(sizeof(APVDecoderFrameInfo));
+    memcpy(temp[configuration_entry->number_of_frame_info], frame_info, sizeof(APVDecoderFrameInfo));
+
+    configuration_entry->frame_info = temp;
+
+    configuration_entry->number_of_frame_info++;
+
+    return 0;
+}
+
+static bool apv_cmp_frameinfo(const APVDecoderFrameInfo *a, const APVDecoderFrameInfo *b) {
+    if (a->reserved_zero_6bits != b->reserved_zero_6bits) return false;
+    if (a->color_description_present_flag != b->color_description_present_flag) return false;
+    if (a->capture_time_distance_ignored != b->capture_time_distance_ignored) return false;
+    if (a->profile_idc != b->profile_idc) return false;
+    if (a->level_idc != b->level_idc) return false;
+    if (a->band_idc != b->band_idc) return false;
+    if (a->frame_width != b->frame_width) return false;
+    if (a->frame_height != b->frame_height) return false;
+    if (a->chroma_format_idc != b->chroma_format_idc) return false;
+    if (a->bit_depth_minus8 != b->bit_depth_minus8) return false;
+    if (a->capture_time_distance != b->capture_time_distance) return false;
+    if (a->color_primaries != b->color_primaries) return false;
+    if (a->transfer_characteristics != b->transfer_characteristics) return false;
+    if (a->matrix_coefficients != b->matrix_coefficients) return false;
+    if (a->full_range_flag != b->full_range_flag) return false;
+    if (a->reserved_zero_7bits != b->reserved_zero_7bits) return false;
+
+    return true;
+}
+
+static int apv_set_frameinfo(APVDecoderFrameInfo* frame_info, const pbu_t *pbu) {
+    frame_info->reserved_zero_6bits = 0;
+
+    frame_info->color_description_present_flag = pbu->frame.frame_header.color_description_present_flag;
+    frame_info->capture_time_distance_ignored = 1;
+
+    frame_info->profile_idc = pbu->frame.frame_header.frame_info.profile_idc;
+    frame_info->level_idc = pbu->frame.frame_header.frame_info.level_idc;
+    frame_info->band_idc = pbu->frame.frame_header.frame_info.band_idc;
+
+    frame_info->frame_width = pbu->frame.frame_header.frame_info.frame_width;
+    frame_info->frame_height = pbu->frame.frame_header.frame_info.frame_height;
+
+    frame_info->chroma_format_idc = pbu->frame.frame_header.frame_info.chroma_format_idc;
+    frame_info->bit_depth_minus8 = pbu->frame.frame_header.frame_info.bit_depth_minus8;
+
+    frame_info->capture_time_distance = pbu->frame.frame_header.frame_info.capture_time_distance;
+
+
+    if(frame_info->color_description_present_flag) {
+        frame_info->color_primaries = pbu->frame.frame_header.color_primaries;
+        frame_info->transfer_characteristics = pbu->frame.frame_header.transfer_characteristics;
+        frame_info->matrix_coefficients = pbu->frame.frame_header.matrix_coefficients;
+
+        frame_info->full_range_flag = pbu->frame.frame_header.full_range_flag;
+        frame_info->reserved_zero_7bits = 0;
+    }
+
+    return 0;
+}
+
+int ff_isom_create_apv_dconf_record(uint8_t **data, int *size) {
+    *size = sizeof(APVDecoderConfigurationRecord);
+    *data = (uint8_t*)av_malloc(sizeof(APVDecoderConfigurationRecord));
+    if(*data==NULL) {
+        *size = 0;
+         return AVERROR_INVALIDDATA;
+    }
+    apvc_init((APVDecoderConfigurationRecord*)*data);
+    return 0;
+}
+
+void ff_isom_free_apv_dconf_record(uint8_t **data) {
+    if (data != NULL && *data != NULL) {
+        APVDecoderConfigurationRecord* apvc = (APVDecoderConfigurationRecord*)*data;
+        apvc_close(apvc);
+
+        free(*data);
+        *data = NULL;
+    }
+}
+
+int ff_isom_fill_apv_dconf_record(const uint8_t *apvdcr, const uint8_t *data, int size) {
+
+    uint32_t au_size = 0;
+    uint32_t number_of_pbu_entry = 0;
+
+    uint32_t frame_type = -1;
+    APVDecoderFrameInfo frame_info;
+
+    int bytes_to_read = size;
+    int ret = 0;
+
+    APVDecoderConfigurationRecord* apvc = (APVDecoderConfigurationRecord*)apvdcr;
+    if (size < 8) {
+        /* We can't write a valid apvC from the provided data */
+        return AVERROR_INVALIDDATA;
+    }
+
     if (bytes_to_read > APV_AU_SIZE_PREFIX_LENGTH) {
         au_size = apv_read_au_size(data, APV_AU_SIZE_PREFIX_LENGTH);
-        if (au_size == 0) goto end;
+        if (au_size == 0) {
+            ret = AVERROR_INVALIDDATA;
+            goto end;
+        }
 
         data += APV_AU_SIZE_PREFIX_LENGTH;
         bytes_to_read -= APV_AU_SIZE_PREFIX_LENGTH;
 
-        if (bytes_to_read < au_size) goto end;
+        if (bytes_to_read < au_size) {
+            ret = AVERROR_INVALIDDATA;
+            goto end;
+        }
 
         data += APV_SIGNATURE_LENGTH;
         bytes_to_read -= APV_SIGNATURE_LENGTH;
 
         // pbu (primitive bitstream units number)
         //
-        // @todo We assumed that number_of_configuration_entry is the number of PBUs in the AU. 
-        //       I'm not sure if this assumption is correct.
-        //       This needs to be figured out.
-        number_of_configuration_entry = apv_number_of_pbu_entry(data, bytes_to_read);
-        if (number_of_configuration_entry <= 0) goto end;
+        number_of_pbu_entry = apv_number_of_pbu_entry(data, bytes_to_read);
+        if (number_of_pbu_entry <= 0) {
+            ret = AVERROR_INVALIDDATA;
+            goto end;
+        }
 
-        apvc.number_of_configuration_entry = number_of_configuration_entry;
-
-        apvc.configuration_entry = malloc(sizeof(APVDecoderConfigurationEntry)*number_of_configuration_entry);
-
-        for(int i=0;i<number_of_configuration_entry;i++) {
+        for(int i=0;i<number_of_pbu_entry;i++) {
 
             pbu_t pbu;
             uint32_t pbu_size = apv_read_pbu_size(data, APV_PBU_SIZE_PREFIX_LENGTH);
 
             data += APV_AU_SIZE_PREFIX_LENGTH;
-            
-            ret = apv_read_pbu(data, pbu_size, &pbu);
-            if(ret!=0)  goto end;
 
-            // fill APVDecoderConfigurationRecord 
-            apvc.configuration_entry[i].pbu_type = pbu.pbu_header.pbu_type;
-            apvc.configuration_entry[i].number_of_frame_info = number_of_frame_info;
+            if(!apv_read_pbu(data, pbu_size, &pbu)) {
 
-            apvc.configuration_entry[i].frame_info = malloc(sizeof(APVDecoderFrameInfo)*number_of_frame_info);
+                switch (pbu.pbu_header.pbu_type)
+                {
+                case APV_PBU_TYPE_PRIMARY_FRAME:
+                    frame_type = APV_FRAME_TYPE_PRIMARY_FRAME;
+                    break;
+                case APV_PBU_TYPE_NON_PRIMARY_FRAME:
+                    frame_type = APV_FRAME_TYPE_NON_PRIMARY_FRAME;
+                    break;
+                case APV_PBU_TYPE_PREVIEW_FRAME:
+                    frame_type = APV_FRAME_TYPE_PREVIEW_FRAME;
+                    break;
+                case APV_PBU_TYPE_DEPTH_FRAME:
+                    frame_type = APV_FRAME_TYPE_DEPTH_FRAME;
+                    break;
+                case APV_PBU_TYPE_ALPHA_FRAME:
+                    frame_type = APV_FRAME_TYPE_ALPHA_FRAME;
+                    break;
+                default:
+                    frame_type = APV_FRAME_TYPE_NON_FRAME;
+                    break;
+                };
 
-            for (int j=0;j<number_of_frame_info;j++) {
-                apvc.configuration_entry[i].frame_info[j].reserved_zero_6bits = 0;
+                if(frame_type == APV_FRAME_TYPE_NON_FRAME) continue;
 
-                // flags
-                apvc.configuration_entry[i].frame_info[j].color_description_present_flag = pbu.frame.frame_header.color_description_present_flag;
-                apvc.configuration_entry[i].frame_info[j].capture_time_distance_ignored = 1;
+                apv_set_frameinfo(&frame_info, &pbu);
 
-                apvc.configuration_entry[i].frame_info[j].profile_idc = pbu.frame.frame_header.frame_info.profile_idc;
-                apvc.configuration_entry[i].frame_info[j].level_idc = pbu.frame.frame_header.frame_info.level_idc;
-                apvc.configuration_entry[i].frame_info[j].band_idc = pbu.frame.frame_header.frame_info.band_idc;
-
-                apvc.configuration_entry[i].frame_info[j].frame_width = pbu.frame.frame_header.frame_info.frame_width;
-                apvc.configuration_entry[i].frame_info[j].frame_height = pbu.frame.frame_header.frame_info.frame_height;
-
-                apvc.configuration_entry[i].frame_info[j].chroma_format_idc = pbu.frame.frame_header.frame_info.chroma_format_idc;
-                apvc.configuration_entry[i].frame_info[j].bit_depth_minus8 = pbu.frame.frame_header.frame_info.bit_depth_minus8;
-
-                apvc.configuration_entry[i].frame_info[j].capture_time_distance = pbu.frame.frame_header.frame_info.capture_time_distance;
-
-
-                if(apvc.configuration_entry[i].frame_info[j].color_description_present_flag) {
-                    apvc.configuration_entry[i].frame_info[j].color_primaries = pbu.frame.frame_header.color_primaries;
-                    apvc.configuration_entry[i].frame_info[j].transfer_characteristics = pbu.frame.frame_header.transfer_characteristics;
-                    apvc.configuration_entry[i].frame_info[j].matrix_coefficients = pbu.frame.frame_header.matrix_coefficients;
-
-                    apvc.configuration_entry[i].frame_info[j].full_range_flag = pbu.frame.frame_header.full_range_flag;
-                    apvc.configuration_entry[i].frame_info[j].reserved_zero_7bits = 0;
-                }
+                if(apvc->configuration_entry[frame_type].number_of_frame_info == 0) {
+                    apv_add_frameinfo(&apvc->configuration_entry[frame_type], &frame_info);
+                    apvc->number_of_configuration_entry++;
+                } else {
+                    for(i=0; i<apvc->configuration_entry[frame_type].number_of_frame_info;i++) {
+                        if(!apv_cmp_frameinfo(apvc->configuration_entry[frame_type].frame_info[i], &frame_info)) {
+                            apv_add_frameinfo(&apvc->configuration_entry[i], &frame_info);
+                            break;
+                        }
+                    }
+                }   
             }
             data += pbu_size;
-            // end pbu           
         }
     }
 
-    ret = apvc_write(pb, &apvc);
-
-end:
-    apvc_close(&apvc);
+end:    
     return ret;
 }
