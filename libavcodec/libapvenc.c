@@ -330,14 +330,15 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 {
     ApvEncContext *apvctx = avctx->priv_data;
     unsigned char *bs_buf = NULL;
-
-    int cfmt;                               // color format
-
+    int cfmt = OAPV_CF_UNKNOWN;  // color format
     oapve_cdesc_t *cdsc =  &(apvctx->cdsc);
     int ret = 0;
 
+    apvctx->id = NULL;
+    apvctx->mid = NULL;
+    apvctx->bitb.addr = NULL;
     memset(cdsc, 0, sizeof(oapve_cdesc_t));
-    
+
     /* allocate bitstream buffer */
     bs_buf = (unsigned char *)av_malloc(MAX_BS_BUF);
     if (bs_buf == NULL) {
@@ -358,8 +359,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         while (en = av_dict_iterate(apvctx->oapv_params, en)) {
             for(int i=0; i<OAPV_MAX_NUM_FRAMES; i++) {
                 if ((ret = oapve_param_parse(&cdsc->param[i], en->key, en->value)) < 0) {
-                    av_log(avctx, AV_LOG_WARNING,
-                        "Error parsing option '%s = %s'.\n",
+                    av_log(avctx, AV_LOG_WARNING,                        "Error parsing option '%s = %s'.\n",
                         en->key, en->value);
                 }
             }
@@ -370,6 +370,9 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     apvctx->id = oapve_create(cdsc, &ret);
     if (apvctx->id == NULL) {
         av_log(avctx, AV_LOG_ERROR, "Cannot create OAPV encoder\n");
+        if(ret==OAPV_ERR_INVALID_LEVEL) {
+            av_log(avctx, AV_LOG_ERROR, "Invalid level idc: %d\n", cdsc->param[0].level_idc);
+        }    
         return AVERROR_EXTERNAL;
     }
 
@@ -534,7 +537,9 @@ static av_cold int libapve_close(AVCodecContext *avctx)
         }
     }
     
-    oapvm_rem_all(apvctx->mid);
+    if (apvctx->mid) {
+        oapvm_rem_all(apvctx->mid);
+    }
 
     if (apvctx->id) {
         oapve_delete(apvctx->id);
