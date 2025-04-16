@@ -359,8 +359,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         while (en = av_dict_iterate(apvctx->oapv_params, en)) {
             for(int i=0; i<OAPV_MAX_NUM_FRAMES; i++) {
                 if ((ret = oapve_param_parse(&cdsc->param[i], en->key, en->value)) < 0) {
-                    av_log(avctx, AV_LOG_WARNING,                        "Error parsing option '%s = %s'.\n",
-                        en->key, en->value);
+                    av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
                 }
             }
         }
