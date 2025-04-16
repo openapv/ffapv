@@ -79,18 +79,11 @@ typedef struct ApvDecContext {
  */
 static void get_conf(AVCodecContext *avctx, oapvd_cdesc_t *cdsc)
 {
-    int cpu_count = av_cpu_count();
-
     /* clear apvd_cdsc structure */
     memset(cdsc, 0, sizeof(oapvd_cdesc_t));
 
     /* init apvd_cdsc structure */
-    if (avctx->thread_count <= 0)
-        cdsc->threads = (cpu_count < OAPV_MAX_THREADS) ? cpu_count : OAPV_MAX_THREADS;
-    else if (avctx->thread_count > OAPV_MAX_THREADS)
-        cdsc->threads = OAPV_MAX_THREADS;
-    else
-        cdsc->threads = avctx->thread_count;
+    cdsc->threads = OAPV_CDESC_THREADS_AUTO;
 }
 
 static int set_extra_config(AVCodecContext *avctx, oapvd_t id, ApvDecContext *ctx)
