@@ -260,10 +260,31 @@ static int apv_read_header(AVFormatContext *s)
         return 0;
     }
 
+    skip_bits(&gb, 8); // frame_header(): reserved_zero_8bits
+    uint8_t color_description_present_flag = get_bits(&gb, 1);
+    if(color_description_present_flag) {
+        uint8_t color_primaries = get_bits(&gb, 8);
+        uint8_t transfer_characteristics = get_bits(&gb, 8);
+        uint8_t matrix_coefficients = get_bits(&gb, 8);
+        uint8_t full_range_flag = get_bits(&gb, 1);
+
+        st->codecpar->color_primaries = color_primaries;
+        st->codecpar->color_trc = transfer_characteristics;
+        st->codecpar->color_space = matrix_coefficients;
+        st->codecpar->color_range = (full_range_flag)?AVCOL_RANGE_JPEG:AVCOL_RANGE_MPEG;
+    } else {
+        st->codecpar->color_primaries = AVCOL_PRI_UNSPECIFIED ;
+        st->codecpar->color_trc = AVCOL_TRC_UNSPECIFIED;
+        st->codecpar->color_space = AVCOL_SPC_UNSPECIFIED;
+        st->codecpar->color_range = AVCOL_RANGE_UNSPECIFIED;
+    }
+
     st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     st->codecpar->codec_id = AV_CODEC_ID_APV;
     st->codecpar->width = frame_info.frame_width;
     st->codecpar->height = frame_info.frame_height;
+    st->codecpar->level = frame_info.level_idc;
+    st->codecpar->profile = frame_info.profile_idc;
 
     // @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-10.1.3.1.1
     // Conformance of a coded frame to the 422-10 profile is indicated by profile_idc equal to 33
