@@ -1,7 +1,7 @@
 /*
- * APV (Advanced Professional Video codec) decoding using APV codec library (libapv)
+ * APV (Advanced Professional Video codec) decoding using APV codec library (liboapv)
  *
- * Copyright (C) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (C) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -528,7 +528,7 @@ static av_cold int libapvd_close(AVCodecContext *avctx)
 #define OFFSET(x) offsetof(ApvDecContext, x)
 #define VD AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
 
-// Consider using following options (./ffmpeg --help encoder=libapv)
+// Consider using following options (./ffmpeg --help encoder=liboapv)
 //
 static const AVOption libapvd_options[] = {
     { "output_csp", "Color space", OFFSET(output_csp),AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VD },
@@ -555,5 +555,6 @@ const FFCodec ff_libapv_decoder = {
     .p.priv_class       = &libapvd_class,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_AVOID_PROBING,
     .p.wrapper_name     = "libapvd",
+    .p.profiles         = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
     .caps_internal      = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_NOT_INIT_THREADSAFE | FF_CODEC_CAP_SETS_PKT_DTS | FF_CODEC_CAP_SETS_FRAME_PROPS
 };

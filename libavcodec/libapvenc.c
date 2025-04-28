@@ -1,8 +1,8 @@
 /*
- * libapve encoder
+ * liboapv encoder
  * Advanced Professional Video codec library
  *
- * Copyright (C) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (C) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -260,8 +260,6 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             cdsc->param[i].h = avctx->height;
 
         if (avctx->framerate.num > 0) {
-            // fps can be float number, but apv API doesn't support it
-            // cdsc->param[i].fps = lrintf(av_q2d(avctx->framerate));
             cdsc->param[i].fps_num = avctx->framerate.num;
             cdsc->param[i].fps_den = avctx->framerate.den;
         }
@@ -482,8 +480,6 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
     apvctx->ifrms.frm[FRM_IDX].group_id = 1; // @todo FIX-ME : need to set properly in case of multi-frame
     apvctx->ifrms.frm[FRM_IDX].pbu_type = OAPV_PBU_TYPE_PRIMARY_FRAME;
     
-    // @todo Find out more on the last param, on how can we use it - reconstructed image
-    //
     ret = oapve_encode(apvctx->id, &apvctx->ifrms, apvctx->mid, &(apvctx->bitb), &(apvctx->stat), NULL);
     if (OAPV_FAILED(ret)) {
         av_log(avctx, AV_LOG_ERROR, "oapve_encode() failed\n");
@@ -502,7 +498,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
             avpkt->time_base.num = apvctx->cdsc.param->fps_num;
             avpkt->time_base.den = apvctx->cdsc.param->fps_den;
 
-            avpkt->pts = avpkt->dts = frame->pts;  // @todo provide implementation in APV apvctx->bitb.ts[0];
+            avpkt->pts = avpkt->dts = frame->pts;
             avpkt->flags |= AV_PKT_FLAG_KEY;
 
             ff_side_data_set_encoder_stats(avpkt, apvctx->qp * FF_QP2LAMBDA, NULL, 0, AV_PICTURE_TYPE_I);
@@ -615,6 +611,7 @@ const FFCodec ff_libapv_encoder = {
     .defaults           = libapve_defaults,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_DR1,
     .p.wrapper_name     = "liboapv",
+    .p.profiles         = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
     .p.pix_fmts         = supported_pixel_formats,
     .caps_internal      = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_NOT_INIT_THREADSAFE,
 };

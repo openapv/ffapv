@@ -1,6 +1,6 @@
 /*
  * APV helper functions for muxers
- * Copyright (c) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -29,8 +29,6 @@
 #include "libavcodec/apv.h"
 #include "avio.h"
 
-// @deprecated
-// @todo reimplemntation is needed
 static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_size)
 {
     if (bits_size >= APV_FRAME_DATA_SIZE_PREFIX_LENGTH)

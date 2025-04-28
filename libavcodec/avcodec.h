@@ -1617,8 +1617,6 @@ typedef struct AVCodecContext {
      */
      int profile;
 
-#define FF_PROFILE_APV_BASELINE             0
-
     /**
      * Encoding level descriptor.
      * - encoding: Set by user, corresponds to a specific level defined by the

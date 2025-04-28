@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -23,9 +23,7 @@
 #include "apv.h"
 #include "apv_parse.h"
 
-// @deprecated
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame
-// @todo reimplemntation is needed
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame
 int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd)
 {
     ff_apv_parse_frame_header(gb, &fd->frame_data_header);

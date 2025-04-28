@@ -1889,26 +1889,26 @@ ffmpeg -i input -c:v libaom-av1 -b:v 500K -aom-params tune=psnr:enable-tpl-model
 
 @end table
 
-@section libapv
+@section liboapv
 
 Advanced Professional Video codec encoder wrapper.
 
-This encoder requires the presence of the libapv headers and library
+This encoder requires the presence of the liboapv headers and library
 during configuration. You need to explicitly configure the build with
-@option{--enable-libapv}.
+@option{--enable-liboapv}.
 
 @float NOTE
-Many libapv encoder options are mapped to FFmpeg global codec options,
+Many liboapv encoder options are mapped to FFmpeg global codec options,
 while unique encoder options are provided through private options.
 Additionally the apv-params private options allows one to pass a list
-of key=value tuples as accepted by the libapv @code{parse_apv_params} function.
+of key=value tuples as accepted by the liboapv @code{parse_apv_params} function.
 @end float
 
-The apv project website is at @url{https://github.com/openapv/openapv}.
+The apv project website is at @url{https://github.com/AcademySoftwareFoundation/openapv}.
 
 @subsection Options
 
-The following options are supported by the libapv wrapper.
+The following options are supported by the liboapv wrapper.
 The apv-equivalent options or values are listed in parentheses for easy migration.
 
 @float NOTE
@@ -1919,29 +1919,14 @@ the documentation of the undocumented generic options, see
 @end float
 
 @float NOTE
-To get a more accurate and extensive documentation of the libapv options,
-invoke the command  @code{apv_app_enc --help} or consult the libapv documentation.
+To get a more accurate and extensive documentation of the liboapv options,
+invoke the command  @code{apv_app_enc --help} or consult the liboapv documentation.
 @end float
 
 @table @option
 @item b (@emph{bitrate})
 Set target video bitrate in bits/s.
 Note that FFmpeg's b option is expressed in bits/s, while apv's bitrate is in kilobits/s.
-
-@item crf (@emph{crf})
-Set the quality for constant quality mode.
-Constant rate factor <10..49> [default: 32]
-
-@item qp (@emph{qp})
-Set constant quantization rate control method parameter.
-Quantization parameter qp <0..51> [default: 32]
-
-@item fps (@emph{fps})
-Set constant quantization rate control method parameter.
-Quantization parameter qp <0..51> [default: 32]
-
-@item threads (@emph{threads})
-Force to use a specific number of threads
 
 @end table
 
