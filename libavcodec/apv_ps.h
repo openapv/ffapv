@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -38,13 +38,13 @@
 #define APV_BLOCK_H                     (1<<APV_LOG2_BLOCK)
 #define APV_BLOCK_D                     (APV_BLOCK_W * APV_BLOCK_H)
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-byte-alignment
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-5.3.17
 typedef struct APVByteAlignemnt {
     uint8_t alignment_bit_equal_to_zero; /* equal to 0*/ // f(1)
 } APVByteAlignemnt;
 
 // The sturcture reflects Tile Header layout
-// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-tile-header
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-5.3.13
 
 // The following descriptors specify the parsing process of each element
 // u(n) - unsigned integer using n bits
@@ -64,7 +64,7 @@ typedef struct APVTileHeader {
 } APVTileHeader;
 
 // The sturcture reflects Tile Info sturcture layout
-// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#section-5.3.8
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-5.3.8
 //
 // The following descriptors specify the parsing process of each element
 // u(n) - unsigned integer using n bits
@@ -83,12 +83,12 @@ typedef struct APVTileInfo {
 
 } APVTileInfo;
 
-// @see https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-quantization-matrix
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-quantization-matrix
 typedef struct APVQuantizationMatrix {
     uint8_t q_matrix[3][8][8];
 } APVQuantizationMatrix;
 
-// @see  https://www.ietf.org/archive/id/draft-lim-apv-03.html#name-frame-information
+// @see  https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-information
 // 5.3.6. Frame information
 typedef struct APVFrameInfo {
     uint8_t profile_idc;                             // u(8)
@@ -124,7 +124,7 @@ typedef struct APVFrameDataHeader {
 
 } APVFrameDataHeader;
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.3
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-5.3.3
 typedef struct APVPBUHeader {
     uint8_t pbu_type;                               // u(8)
     uint8_t group_id;                               // u(16)
@@ -142,45 +142,45 @@ typedef struct APVTileData {
     APVByteAlignemnt byte_alignent;
 } APVTileData;
 
-typedef struct APVTile { // @todo change to AVPFrameData
+typedef struct APVTile {
     APVTileHeader tile_header;
     APVTileData tile_data[3];
 } APVTile;
 
-typedef struct APVFrameData { // @todo change to AVPFrameData
+typedef struct APVFrameData {
     APVFrameDataHeader frame_data_header;
     APVTile **tiles; // table of pointers to elements of type APVTile; the size of table is NumTiles
 } APVFrameData;
 
-typedef struct APVParamSets { // @todo change to AVPFrameData
+typedef struct APVParamSets {
     APVFrameData frame_data;
 } APVParamSets;
 
-// https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-primitive-bitstream-unit-he
+// https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-primitive-bitstream-unit-he
 int ff_apv_parse_pbu_header(GetBitContext *gb, APVPBUHeader *fdh);
 
-// https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-header
+// https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-header
 int ff_apv_parse_frame_header(GetBitContext *gb, APVFrameDataHeader *fdh);
 
-// https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-information
+// https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-information
 int ff_apv_parse_frame_info(GetBitContext *gb, APVFrameInfo *frame_info);
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame-information
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-information
 int ff_apv_tile_info(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTileInfo *ti);
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-tile
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-tile
 int ff_apv_parse_tile(GetBitContext *gb, const APVFrameDataHeader *fdh, APVTile *tile, uint8_t tileIdx);
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-byte-alignment
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-byte-alignment
 int ff_apv_byte_alignment(GetBitContext *gb, APVByteAlignemnt *ba);
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-quantization-matrix
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-quantization-matrix
 int ff_apv_quantization_matrix(GetBitContext *gb, int num_comp, APVQuantizationMatrix *qm);
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-metadata
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-metadata
 int ff_apv_parse_metadata(GetBitContext *gb, APVFrameData *fd);
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-filler
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-filler
 int ff_apv_parse_filler_data(GetBitContext *gb, APVFrameData *fd);
 
 void ff_apv_ps_free(APVParamSets *ps);

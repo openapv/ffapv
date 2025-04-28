@@ -214,7 +214,7 @@ External library support:
   --enable-ladspa          enable LADSPA audio filtering [no]
   --enable-lcms2           enable ICC profile support via LittleCMS 2 [no]
   --enable-libaom          enable AV1 video encoding/decoding via libaom [no]
-  --enable-liboapv          enable APV encoding/decoding via liboapv [no]
+  --enable-liboapv         enable APV encoding/decoding via liboapv [no]
   --enable-libaribb24      enable ARIB text and caption decoding via libaribb24 [no]
   --enable-libaribcaption  enable ARIB text and caption decoding via libaribcaption [no]
   --enable-libass          enable libass subtitles rendering,

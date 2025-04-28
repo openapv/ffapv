@@ -1541,7 +1541,7 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .type      = AVMEDIA_TYPE_VIDEO,
         .name      = "apng",
         .long_name = NULL_IF_CONFIG_SMALL("APNG (Animated Portable Network Graphics) image"),
-        .props     = AV_CODEC_PROP_LOSSLESS | AV_CODEC_PROP_INTRA_ONLY,
+        .props     = AV_CODEC_PROP_LOSSLESS,
         .mime_types= MT("image/png"),
     },
     {
@@ -1991,6 +1991,8 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .name      = "apv",
         .long_name = NULL_IF_CONFIG_SMALL("Advanced Professional Video (APV) Codec"),
         .props     = AV_CODEC_PROP_INTRA_ONLY | AV_CODEC_PROP_LOSSY | AV_CODEC_PROP_REORDER,
+        .profiles  = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
+
     },
 
     /* various PCM "codecs" */

@@ -1,7 +1,7 @@
 /*
  * APV format parser
  *
- * Copyright (C) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (C) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -32,11 +32,7 @@ typedef struct APVParserContext {
 } APVParserContext;
 
 /**
- * @todo Provide implementation
- * @note The current implementation of the parse_apv_bitstream function does nothing.
- *       If it is not needed, it should be removed.
- * 
- * @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-raw-bitstream-format
+ * @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-12.1
  * 
  * Parse APV bitstream
  *
@@ -80,12 +76,9 @@ static int decode_extradata(AVCodecParserContext *s, AVCodecContext *avctx)
     if (!data || size <= 0)
         return -1;
     
-    // @todo provide implementation
-
     return ret;
 }
 
-// @note Consider whether parsing APV stream is needed
 static int apv_parse(AVCodecParserContext *s, AVCodecContext *avctx,
                      const uint8_t **poutbuf, int *poutbuf_size,
                      const uint8_t *buf, int buf_size)
@@ -122,7 +115,6 @@ static void apv_parser_close(AVCodecParserContext *s)
 {
     APVParserContext *ctx = s->priv_data;
 
-    // @todo move to APVFrameData.delete()
     if(ctx->ps.frame_data.frame_data_header.tile_info.ColStarts) {
         free(ctx->ps.frame_data.frame_data_header.tile_info.ColStarts);
         ctx->ps.frame_data.frame_data_header.tile_info.ColStarts = NULL;

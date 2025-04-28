@@ -39,8 +39,8 @@ This driver can be installed using amdgpu-pro-install script in official amd dri
 
 FFmpeg can make use of the APV library for APV video encoding and decoding.
 
-Go to @url{https://github.com/openapv/openapv} and follow the instructions for
-installing the APV library. Then pass @code{--enable-libapv} to configure to
+Go to @url{https://github.com/AcademySoftwareFoundation/openapv} and follow the instructions for
+installing the APV library. Then pass @code{--enable-liboapv} to configure to
 enable it.
 
 @section AviSynth
@@ -905,7 +905,7 @@ following image formats are supported:
 @item Apple QuickDraw        @tab     @tab  X
     @tab fourcc: qdrw
 @item Advanced Professional Video codec     @tab  X  @tab  X
-    @tab encoding and decoding supported through external library libapv
+    @tab encoding and decoding supported through external library liboapv
 @item Argonaut Video         @tab     @tab  X
     @tab Used in some Argonaut games.
 @item Asus v1                @tab  X  @tab  X

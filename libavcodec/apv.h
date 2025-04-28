@@ -1,7 +1,7 @@
 /*
  * APV definitions and enums
  *
- * Copyright (c) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -32,10 +32,10 @@
 // @deprecated
 #define APV_FRAME_DATA_SIZE_PREFIX_LENGTH   (4)  /* byte */
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.3
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-5.3.3
 #define APV_PBU_HEADER_SIZE                 (4)  /* byte */
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#section-5.3.6
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-5.3.6
 #define APV_FRAME_INFO_SIZE                 (14)  /* byte */
 
 /* size of macroblock */
