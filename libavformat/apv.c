@@ -1,6 +1,6 @@
 /*
  * APV helper functions for muxers
- * Copyright (c) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -115,7 +115,7 @@ typedef struct APVDecoderConfigurationRecord  {
 } APVDecoderConfigurationRecord ;
 
 // 5.3.6. Frame information
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame-information
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-information
 typedef struct frame_info_t {
     uint8_t profile_idc;            // 8 bits
     uint8_t level_idc;              // 8 bits
@@ -133,13 +133,13 @@ typedef struct frame_info_t {
 } frame_info_t;
 
 // 5.3.7. Quantization matrix 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-quantization-matrix
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-quantization-matrix
 typedef struct quantization_matrix_t {
     uint8_t q_matrix[3][8][8]; // @todo use NumCmp instead of 3
 } quantization_matrix_t;
 
 // 5.3.8. Tile info
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-info
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-tile-info
 typedef struct tile_info_t {
     uint32_t tile_width_in_mbs;                             // u(20)
     uint32_t tile_height_in_mbs;                            // u(20)
@@ -158,13 +158,13 @@ typedef struct tile_info_t {
 
 
 // 5.3.17. Byte alignment
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-byte-alignment
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-byte-alignment
 typedef struct byte_alignment_t {
     uint8_t alignment_bit_equal_to_zero; /* equal to 0*/ // f(1)
 } byte_alignment_t;
 
 // 5.3.5. Frame header
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame-header
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-header
 typedef struct frame_header_t {
     frame_info_t frame_info;
     uint8_t reserved_zero_8bits;                // 8 bits
@@ -185,13 +185,13 @@ typedef struct frame_header_t {
 } frame_header_t;
 
 // 5.3.11. Filler
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-filler
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-filler
 typedef struct filler_t {
     uint8_t *ff_byte; /* is a byte equal to 0xFF */ // f(8)
 } filler_t;
 
 // 5.3.13. Tile header
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-header
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-tile-header
 typedef struct tile_header_t {
     uint16_t tile_header_size;                  // u(16)
     uint16_t tile_index;                        // u(16)
@@ -203,7 +203,7 @@ typedef struct tile_header_t {
 } tile_header_t;
 
 // 5.3.16. AC coefficient coding
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#section-5.3.16
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-ac-coefficient-coding
 typedef struct   {
     uint8_t coeff_zero_run;
     uint8_t abs_ac_coeff_minus1;
@@ -211,7 +211,7 @@ typedef struct   {
 } ac_coeff_coding_t;
 
 // 5.3.15. Macroblock layer
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-macroblock-layer
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-macroblock-layer
 typedef struct macroblock_layer_t {
     uint8_t abs_dc_coeff_diff;  // h(v)
     uint8_t sign_dc_coeff_diff; // u(1)
@@ -219,7 +219,7 @@ typedef struct macroblock_layer_t {
 } macroblock_layer_t;
 
 // 5.3.14. Tile data
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-tile-data
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-tile-data
 typedef struct tile_data_t {
     macroblock_layer_t macroblock_layer;
     byte_alignment_t byte_alignment;
@@ -227,7 +227,7 @@ typedef struct tile_data_t {
 
 
 // 5.3.11. Filler
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-filler
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-filler
 typedef struct tile_t {
     tile_header_t tile_header;
     uint8_t tile_data;
@@ -235,7 +235,7 @@ typedef struct tile_t {
 } tile_t;
 
 // 5.3.4 Frame
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame
 typedef struct frame_t {
     frame_header_t frame_header;
     uint32_t tile_size[NUM_TILES_MAX];           // table of NumTiles size
@@ -244,7 +244,7 @@ typedef struct frame_t {
 } frame_t;
 
 // 5.3.3. Primitive bitstream unit header
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-primitive-bitstream-unit-he
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-primitive-bitstream-unit-he
 typedef struct pbu_header_t {
     uint8_t pbu_type;               // 8 bits
     uint16_t group_id;              // 16 bits
@@ -252,7 +252,7 @@ typedef struct pbu_header_t {
 } pbu_header_t;
 
 // 5.3.9. Access unit information 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-access-unit-information
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-access-unit-information
 typedef struct au_info_t {
     uint16_t num_frames;            // 16 bits
 
@@ -272,7 +272,7 @@ typedef struct {
 } uint128_t;
 
 // 5.3.10. Metadata 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-metadata
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-metadata
 typedef struct metadata_t {
     uint16_t metadata_size;             // 32 bits
 
@@ -314,7 +314,7 @@ typedef struct metadata_t {
 } metadata_t;
 
 // 5.3.2. Primitive bitstream unit
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-primitive-bitstream-unit
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-primitive-bitstream-unit
 typedef struct pbu_t {
     pbu_header_t pbu_header;
     frame_t frame;
@@ -332,7 +332,7 @@ static int apv_read_pbu_header(GetBitContext *gb, pbu_header_t *pbu_header)
     return 0;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-03#name-frame-information
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame-information
 static int apv_read_frame_info(GetBitContext *gb, frame_info_t *frame_info)
 {
     uint8_t reserved_zero_5bits;

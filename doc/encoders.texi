@@ -1925,6 +1925,7 @@ Set liboapvenc options using a list of @var{key}=@var{value} pairs separated
 by ":". See the liboapv encoder user guide for a list of accepted parameters.
 @end table
 
+
 @section libsvtav1
 
 SVT-AV1 encoder wrapper.

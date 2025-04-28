@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *

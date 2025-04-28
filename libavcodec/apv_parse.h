@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Dawid Kozinski <d.kozinski@samsung.com>
+ * Copyright (c) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
  * This file is part of FFmpeg.
  *
@@ -32,8 +32,6 @@
 #include "apv.h"
 #include "apv_ps.h"
 
-// @deprecated
-// @todo reimplemntation is needed
 static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_size, void *logctx)
 {
     uint32_t frame_data_size = 0;
@@ -48,7 +46,7 @@ static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_si
     return frame_data_size;
 }
 
-// @see 10.2. Raw bitstream format [draft-lim-apv-02.html]
+// @see 12.1. Raw bitstream format [https://www.ietf.org/archive/id/draft-lim-apv-04.html#section-12.1]
 static inline uint32_t apv_read_au_size(const uint8_t *bits, int bits_size, void *logctx)
 {
     uint32_t au_size = 0;
@@ -77,7 +75,7 @@ static inline uint32_t apv_read_pbu_size(const uint8_t *bits, int bits_size, voi
     return pbu_size;
 }
 
-// @see https://datatracker.ietf.org/doc/html/draft-lim-apv-02#name-frame
+// @see https://www.ietf.org/archive/id/draft-lim-apv-04.html#name-frame
 int ff_apv_parse_frame_data(GetBitContext *gb, APVFrameData *fd);
 
 #endif /* AVCODEC_APV_PARSE_H */
