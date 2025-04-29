@@ -25,9 +25,9 @@
 #include "apv.h"
 #include "apv_parse.h"
 
-typedef struct APVParserContext {
-    APVParamSets ps;
+#define APV_AU_SIZE_PREFIX_LENGTH (4)
 
+typedef struct APVParserContext {
     int parsed_extradata;
 } APVParserContext;
 
@@ -43,38 +43,26 @@ typedef struct APVParserContext {
  */
 static int parse_apv_bitstream(AVCodecParserContext *s, AVCodecContext *avctx, const uint8_t *buf, int buf_size)
 {
-    const uint8_t *data = buf;
-    int data_size = buf_size;
-
-    if (data_size > 0) {
-        int au_size = 0;
-        
-        // Buffer size is not enough for buffer to store Frame Data 4-bytes prefix (length)
-        if (data_size < APV_AU_SIZE_PREFIX_LENGTH)
-            return AVERROR_INVALIDDATA;
-
-        au_size = apv_read_au_size(data, APV_AU_SIZE_PREFIX_LENGTH, avctx);
-
-        if (!au_size || au_size > INT_MAX)
-            return AVERROR_INVALIDDATA;
-
-        data += APV_AU_SIZE_PREFIX_LENGTH;
-        data_size -= APV_AU_SIZE_PREFIX_LENGTH;
-
-        if (data_size < au_size)
-            return AVERROR_INVALIDDATA;
+    if (!buf || buf_size <= 0) {
+        return AVERROR_INVALIDDATA;
     }
+
     return 0;
 }
 
 // Decoding Frame Data from apvC (APVDecoderConfigurationRecord)
 static int decode_extradata(AVCodecParserContext *s, AVCodecContext *avctx)
 {
+    // version                          [ 1 byte ]
+    // flags                            [ 3 bytes]
+    // APVDecoderConfigurationRecord    [at least 18 bytes]
     const uint8_t *data = avctx->extradata;
     int size = avctx->extradata_size;
+
     int ret = 0;
-    if (!data || size <= 0)
-        return -1;
+    if (!data || size < 22) {
+        return AVERROR_INVALIDDATA;
+    }
     
     return ret;
 }
@@ -111,31 +99,8 @@ static int apv_parse(AVCodecParserContext *s, AVCodecContext *avctx,
     return next;
 }
 
-static void apv_parser_close(AVCodecParserContext *s)
-{
-    APVParserContext *ctx = s->priv_data;
-
-    if(ctx->ps.frame_data.frame_data_header.tile_info.ColStarts) {
-        free(ctx->ps.frame_data.frame_data_header.tile_info.ColStarts);
-        ctx->ps.frame_data.frame_data_header.tile_info.ColStarts = NULL;
-    }
-
-    if(ctx->ps.frame_data.frame_data_header.tile_info.RowStarts) {
-        free(ctx->ps.frame_data.frame_data_header.tile_info.RowStarts);
-        ctx->ps.frame_data.frame_data_header.tile_info.RowStarts = NULL;
-    }
-    
-    if(ctx->ps.frame_data.frame_data_header.tile_info.tile_size_in_fh) {
-        free(ctx->ps.frame_data.frame_data_header.tile_info.tile_size_in_fh);
-        ctx->ps.frame_data.frame_data_header.tile_info.tile_size_in_fh = NULL;
-    }
-
-    ff_apv_ps_free(&ctx->ps);
-}
-
 const AVCodecParser ff_apv_parser = {
     .codec_ids      = { AV_CODEC_ID_APV },
     .priv_data_size = sizeof(APVParserContext),
     .parser_parse   = apv_parse,
-    .parser_close   = apv_parser_close,
 };
