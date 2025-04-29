@@ -29,21 +29,9 @@
 #include "libavcodec/apv.h"
 #include "avio.h"
 
-static inline uint32_t apv_read_frame_data_size(const uint8_t *bits, int bits_size)
-{
-    if (bits_size >= APV_FRAME_DATA_SIZE_PREFIX_LENGTH)
-        return AV_RB32(bits);
+// #define APV_AU_SIZE_PREFIX_LENGTH (4)
+//#define APV_FRAME_DATA_SIZE_PREFIX_LENGTH (4)
 
-    return 0;
-}
-
-static inline uint32_t apv_read_au_size(const uint8_t *bits, int bits_size)
-{
-    if (bits_size >= APV_AU_SIZE_PREFIX_LENGTH)
-        return AV_RB32(bits);
-
-    return 0;
-}
 
 /**
  * Writes APV sample metadata to the provided AVIOContext.
