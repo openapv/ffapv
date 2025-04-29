@@ -43,6 +43,8 @@
 #include "apv.h"
 #include "apv_imgb.h"
 
+#define APV_AU_SIZE_PREFIX_LENGTH (4)
+
 /**
  * The structure stores all the states associated with the instance of APV decoder
  */

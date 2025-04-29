@@ -66,6 +66,10 @@
 #define APV_PBU_FRAME_TYPE_NUM           (5)
 #define CONFIGURATIONS_MAX                         (APV_PBU_FRAME_TYPE_NUM)
 
+#define APV_PBU_SIZE_PREFIX_LENGTH      (4)
+#define APV_SIGNATURE_LENGTH            (4)
+#define APV_AU_SIZE_PREFIX_LENGTH       (4)
+
 typedef struct APVDecoderFrameInfo {
     uint8_t reserved_zero_6bits;                    // 6 bits
     uint8_t color_description_present_flag;         // 1 bit
@@ -745,81 +749,72 @@ int ff_isom_fill_apv_dconf_record(const uint8_t *apvdcr, const uint8_t *data, in
         return AVERROR_INVALIDDATA;
     }
 
-    if (bytes_to_read > APV_AU_SIZE_PREFIX_LENGTH) {
-        au_size = apv_read_au_size(data, APV_AU_SIZE_PREFIX_LENGTH);
-        if (au_size == 0) {
-            ret = AVERROR_INVALIDDATA;
-            goto end;
-        }
+    au_size = size;
+
+    if (bytes_to_read < au_size) {
+        ret = AVERROR_INVALIDDATA;
+        goto end;
+    }
+
+    data += APV_SIGNATURE_LENGTH;
+    bytes_to_read -= APV_SIGNATURE_LENGTH;
+
+    // pbu (primitive bitstream units number)
+    //
+    number_of_pbu_entry = apv_number_of_pbu_entry(data, bytes_to_read);
+    if (number_of_pbu_entry <= 0) {
+        ret = AVERROR_INVALIDDATA;
+        goto end;
+    }
+
+    for(int i=0;i<number_of_pbu_entry;i++) {
+
+        pbu_t pbu;
+        uint32_t pbu_size = apv_read_pbu_size(data, APV_PBU_SIZE_PREFIX_LENGTH);
 
         data += APV_AU_SIZE_PREFIX_LENGTH;
-        bytes_to_read -= APV_AU_SIZE_PREFIX_LENGTH;
 
-        if (bytes_to_read < au_size) {
-            ret = AVERROR_INVALIDDATA;
-            goto end;
-        }
+        if(!apv_read_pbu(data, pbu_size, &pbu)) {
 
-        data += APV_SIGNATURE_LENGTH;
-        bytes_to_read -= APV_SIGNATURE_LENGTH;
+            switch (pbu.pbu_header.pbu_type)
+            {
+            case APV_PBU_TYPE_PRIMARY_FRAME:
+                frame_type = APV_FRAME_TYPE_PRIMARY_FRAME;
+                break;
+            case APV_PBU_TYPE_NON_PRIMARY_FRAME:
+                frame_type = APV_FRAME_TYPE_NON_PRIMARY_FRAME;
+                break;
+            case APV_PBU_TYPE_PREVIEW_FRAME:
+                frame_type = APV_FRAME_TYPE_PREVIEW_FRAME;
+                break;
+            case APV_PBU_TYPE_DEPTH_FRAME:
+                frame_type = APV_FRAME_TYPE_DEPTH_FRAME;
+                break;
+            case APV_PBU_TYPE_ALPHA_FRAME:
+                frame_type = APV_FRAME_TYPE_ALPHA_FRAME;
+                break;
+            default:
+                frame_type = APV_FRAME_TYPE_NON_FRAME;
+                break;
+            };
 
-        // pbu (primitive bitstream units number)
-        //
-        number_of_pbu_entry = apv_number_of_pbu_entry(data, bytes_to_read);
-        if (number_of_pbu_entry <= 0) {
-            ret = AVERROR_INVALIDDATA;
-            goto end;
-        }
+            if(frame_type == APV_FRAME_TYPE_NON_FRAME) continue;
 
-        for(int i=0;i<number_of_pbu_entry;i++) {
+            apv_set_frameinfo(&frame_info, &pbu);
 
-            pbu_t pbu;
-            uint32_t pbu_size = apv_read_pbu_size(data, APV_PBU_SIZE_PREFIX_LENGTH);
-
-            data += APV_AU_SIZE_PREFIX_LENGTH;
-
-            if(!apv_read_pbu(data, pbu_size, &pbu)) {
-
-                switch (pbu.pbu_header.pbu_type)
-                {
-                case APV_PBU_TYPE_PRIMARY_FRAME:
-                    frame_type = APV_FRAME_TYPE_PRIMARY_FRAME;
-                    break;
-                case APV_PBU_TYPE_NON_PRIMARY_FRAME:
-                    frame_type = APV_FRAME_TYPE_NON_PRIMARY_FRAME;
-                    break;
-                case APV_PBU_TYPE_PREVIEW_FRAME:
-                    frame_type = APV_FRAME_TYPE_PREVIEW_FRAME;
-                    break;
-                case APV_PBU_TYPE_DEPTH_FRAME:
-                    frame_type = APV_FRAME_TYPE_DEPTH_FRAME;
-                    break;
-                case APV_PBU_TYPE_ALPHA_FRAME:
-                    frame_type = APV_FRAME_TYPE_ALPHA_FRAME;
-                    break;
-                default:
-                    frame_type = APV_FRAME_TYPE_NON_FRAME;
-                    break;
-                };
-
-                if(frame_type == APV_FRAME_TYPE_NON_FRAME) continue;
-
-                apv_set_frameinfo(&frame_info, &pbu);
-
-                if(apvc->configuration_entry[frame_type].number_of_frame_info == 0) {
-                    apv_add_frameinfo(&apvc->configuration_entry[frame_type], &frame_info);
-                    apvc->number_of_configuration_entry++;
-                } else {
-                    for(i=0; i<apvc->configuration_entry[frame_type].number_of_frame_info;i++) {
-                        if(!apv_cmp_frameinfo(apvc->configuration_entry[frame_type].frame_info[i], &frame_info)) {
-                            apv_add_frameinfo(&apvc->configuration_entry[i], &frame_info);
-                            break;
-                        }
+            if(apvc->configuration_entry[frame_type].number_of_frame_info == 0) {
+                apv_add_frameinfo(&apvc->configuration_entry[frame_type], &frame_info);
+                apvc->number_of_configuration_entry++;
+            } else {
+                for(i=0; i<apvc->configuration_entry[frame_type].number_of_frame_info;i++) {
+                    if(!apv_cmp_frameinfo(apvc->configuration_entry[frame_type].frame_info[i], &frame_info)) {
+                        apv_add_frameinfo(&apvc->configuration_entry[i], &frame_info);
+                        break;
                     }
-                }   
-            }
-            data += pbu_size;
+                }
+            }   
         }
+        data += pbu_size;
     }
 
 end:    
