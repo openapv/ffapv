@@ -29,10 +29,6 @@
 #include "libavcodec/apv.h"
 #include "avio.h"
 
-// #define APV_AU_SIZE_PREFIX_LENGTH (4)
-//#define APV_FRAME_DATA_SIZE_PREFIX_LENGTH (4)
-
-
 /**
  * Writes APV sample metadata to the provided AVIOContext.
  *
