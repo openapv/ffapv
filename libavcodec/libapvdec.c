@@ -212,10 +212,12 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
                   imgb->w[0], imgb->h[0]);
     
     
-    avctx->color_primaries = frm_info->color_primaries;
-    avctx->color_trc = frm_info->transfer_characteristics;
-    avctx->colorspace = frm_info->matrix_coefficients;
-    avctx->color_range = frm_info->full_range_flag ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+    if (frm_info->color_description_present_flag) {
+        avctx->color_primaries = frm_info->color_primaries;
+        avctx->color_trc = frm_info->transfer_characteristics;
+        avctx->colorspace = frm_info->matrix_coefficients;
+        avctx->color_range = frm_info->full_range_flag ? AVCOL_RANGE_UNSPECIFIED : AVCOL_RANGE_MPEG;
+    }
 
     return 0;
 }
