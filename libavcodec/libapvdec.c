@@ -174,7 +174,7 @@ static int export_stream_params(const oapv_au_info_t* aui, AVCodecContext *avctx
  * @param[out] frame
  * @return 0 on success, negative value on failure
  */
-static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, struct AVFrame *frame)
+static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, struct AVFrame *frame, oapv_frm_info_t *frm_info)
 {
     int ret;
 
@@ -210,6 +210,14 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
     av_image_copy(frame->data, frame->linesize, (const uint8_t **)imgb->a,
                   imgb->s, avctx->pix_fmt,
                   imgb->w[0], imgb->h[0]);
+    
+    
+    if (frm_info->color_description_present_flag) {
+        avctx->color_primaries = frm_info->color_primaries;
+        avctx->color_trc = frm_info->transfer_characteristics;
+        avctx->colorspace = frm_info->matrix_coefficients;
+        avctx->color_range = frm_info->full_range_flag ? AVCOL_RANGE_UNSPECIFIED : AVCOL_RANGE_MPEG;
+    }
 
     return 0;
 }
@@ -437,7 +445,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         }
         
         /* Copy decoded image into AVFrame object */
-        ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i]);
+        ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i], &stat.aui.frm_info[i]);
         if(ret < 0) {
             av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
             av_frame_unref(apvctx->frames[i]);
