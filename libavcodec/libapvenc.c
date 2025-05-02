@@ -62,15 +62,15 @@ typedef struct ApvEncContext {
     oapve_cdesc_t   cdsc;   // coding parameters i.e profile, width & height of input frame, num of therads, frame rate ...
     oapv_bitb_t     bitb;   // bitstream buffer (output)
     oapve_stat_t    stat;   // encoding status (output)
-    
+
     oapv_imgb_t *imgb_r;    // image buffer for read
     oapv_imgb_t *imgb_i;    // image buffer for input
     oapv_frms_t ifrms;      // frames for input
 
     int num_frames;         // number of frames in an access unit
-    
+
     int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
-    
+
     int qp;                 // quantization parameter (QP) [0,51]
 
     int input_depth;        // input data bit depth (8, 10)
@@ -115,7 +115,7 @@ static AVFrame* copy_and_align_avframe_to_16(const AVFrame* src_frame) {
 
     // Data copying
     av_frame_copy(dst_frame, src_frame);
-    
+
     return dst_frame;
 }
 
@@ -230,7 +230,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     const char *option_name = "qp";
     uint8_t qp_default_value = 0;
     const AVOption *option = NULL;
-    
+
     apvctx = avctx->priv_data;
     option = av_opt_find(&apvctx->class, option_name, NULL, 0, 0);
 
@@ -285,27 +285,18 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             cdsc->param[i].color_primaries = avctx->color_primaries;
             cdsc->param[i].color_description_present_flag = 1;
         }
-        else
-            cdsc->param[i].color_primaries = AVCOL_PRI_UNSPECIFIED;
-        
         if(avctx->color_trc!=AVCOL_TRC_UNSPECIFIED) {
             cdsc->param[i].transfer_characteristics = avctx->color_trc;
             cdsc->param[i].color_description_present_flag = 1;
         }
-        else
-            cdsc->param[i].transfer_characteristics = AVCOL_TRC_UNSPECIFIED;
         if(avctx->colorspace!=AVCOL_SPC_UNSPECIFIED) {
             cdsc->param[i].matrix_coefficients = avctx->colorspace;
             cdsc->param[i].color_description_present_flag = 1;
         }
-        else
-            cdsc->param[i].matrix_coefficients = AVCOL_SPC_UNSPECIFIED;
         if(avctx->color_range!=AVCOL_RANGE_UNSPECIFIED) {
             cdsc->param[i].full_range_flag = (avctx->color_range==AVCOL_RANGE_JPEG)?1:0;
             cdsc->param[i].color_description_present_flag = 1;
         }
-        else
-            cdsc->param[i].full_range_flag = AVCOL_RANGE_UNSPECIFIED;
     }
 
     apvctx->input_csp = libapve_apv_color_space(avctx->pix_fmt);
@@ -329,7 +320,7 @@ static int get_bit_depth(AVCodecContext *avctx, enum AVPixelFormat pixel_format)
      }
      return desc->comp[0].depth;
  }
-  
+
 
 /**
  * @brief Initialize APV codec
@@ -369,7 +360,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     {
         const AVDictionaryEntry *en = NULL;
         while (en = av_dict_iterate(apvctx->oapv_params, en)) {
-            for(int i=0; i<OAPV_MAX_NUM_FRAMES; i++) {
+            for(int i=0; i<cdsc->max_num_frms; i++) {
                 if ((ret = oapve_param_parse(&cdsc->param[i], en->key, en->value)) < 0) {
                     av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
                 }
@@ -383,7 +374,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Cannot create OAPV encoder\n");
         if(ret==OAPV_ERR_INVALID_LEVEL) {
             av_log(avctx, AV_LOG_ERROR, "Invalid level idc: %d\n", cdsc->param[0].level_idc);
-        }    
+        }
         return AVERROR_EXTERNAL;
     }
 
@@ -397,7 +388,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     apvctx->input_depth = get_bit_depth(avctx, avctx->pix_fmt);
     if(apvctx->input_depth != 10 && apvctx->input_depth != 12)  {
         av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format (%s)n", av_get_pix_fmt_name(avctx->pix_fmt));
-        return AVERROR(EINVAL); 
+        return AVERROR(EINVAL);
     }
 
     apvctx->imgb_r = NULL; // image buffer for read
@@ -408,7 +399,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 
     // create input and reconstruction image buffers
     memset(&apvctx->ifrms, 0, sizeof(oapv_frms_t));
-    
+
     for(int i = 0; i < apvctx->num_frames; i++) {
         if(apvctx->input_depth  == 10) {
             apvctx->ifrms.frm[FRM_IDX].imgb = apv_imgb_create(avctx->width, avctx->height, OAPV_CS_SET(cfmt, apvctx->input_depth, 0), avctx);
@@ -419,8 +410,8 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         }
         apvctx->ifrms.num_frms++;
     }
-    
-        
+
+
     return 0;
 }
 
@@ -474,7 +465,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
     // for (int i = 0; i < apvctx->imgb_i->np; i++) {
     //     for(int j=0; j < frame_height[i]; j++) {
-    //         memcpy(apvctx->imgb_i->a[i]+j*apvctx->imgb_i->s[i], frame->data[i]+j*frame->linesize[i], frame->linesize[i]);    
+    //         memcpy(apvctx->imgb_i->a[i]+j*apvctx->imgb_i->s[i], frame->data[i]+j*frame->linesize[i], frame->linesize[i]);
     //     }
     // }
 
@@ -486,7 +477,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
     apvctx->ifrms.frm[FRM_IDX].group_id = 1; // @todo FIX-ME : need to set properly in case of multi-frame
     apvctx->ifrms.frm[FRM_IDX].pbu_type = OAPV_PBU_TYPE_PRIMARY_FRAME;
-    
+
     ret = oapve_encode(apvctx->id, &apvctx->ifrms, apvctx->mid, &(apvctx->bitb), &(apvctx->stat), NULL);
     if (OAPV_FAILED(ret)) {
         av_log(avctx, AV_LOG_ERROR, "oapve_encode() failed\n");
@@ -514,8 +505,8 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
         } else {
             *got_packet = 0;
         }
-    } 
-    
+    }
+
     return 0;
 }
 
@@ -538,7 +529,7 @@ static av_cold int libapve_close(AVCodecContext *avctx)
             apvctx->ifrms.frm[i].imgb->release(apvctx->ifrms.frm[i].imgb);
         }
     }
-    
+
     if (apvctx->mid) {
         oapvm_rem_all(apvctx->mid);
     }
@@ -571,7 +562,7 @@ static const enum AVPixelFormat supported_pixel_formats[] = {
 
 // Consider using following options (./ffmpeg --help encoder=liboapv)
 //
-// Using oapv-params: 
+// Using oapv-params:
 // ffmpeg -f rawvideo -pix_fmt yuv422p10le -i ${INPUT_FILE} -c:v liboapv -oapv-params "profile=422-10:level=7.1:band=3:preset=medium:width=352:height=288:fps=24:qp=63:bitrate=1M" -f rawvideo ${OUTPUT_FILE}
 //
 static const AVOption liboapv_options[] = {
