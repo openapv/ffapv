@@ -63,11 +63,11 @@ typedef struct ApvDecContext {
 
     struct AVContainerFifo *output_fifo;
     AVFrame* frames[OAPV_MAX_NUM_FRAMES];
-    
+
     int frames_count;
     int total_frames_count;
     int au_count;
-    
+
     AVPacket *pkt;          // frame data
 } ApvDecContext;
 
@@ -150,13 +150,13 @@ static int export_stream_params(const oapv_au_info_t* aui, AVCodecContext *avctx
         break;
     case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 1):
         avctx->pix_fmt = AV_PIX_FMT_YUVA444P12BE;
-        break;        
+        break;
     case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 0):   // profile 99
         avctx->pix_fmt = AV_PIX_FMT_GRAY10LE;
         break;
     case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1):
         avctx->pix_fmt = AV_PIX_FMT_GRAY10BE;
-        break;    
+        break;
     default:
         av_log(avctx, AV_LOG_ERROR, "Unknown color space\n");
         avctx->pix_fmt = AV_PIX_FMT_NONE;
@@ -179,7 +179,7 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
     int ret;
 
     if (imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 0)  && // profile 33
-        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 1)  && // profile 33 
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 1)  && // profile 33
         imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 0)  && // profile 44
         imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 1)  && // profile 44
         imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 0)  && // profile 55
@@ -191,9 +191,9 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
         imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 0) && // profile 88
         imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 1) && // profile 88
         imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 0)  && // profile 99
-        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1)) {  // profile 99 
+        imgb->cs != OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1)) {  // profile 99
             av_log(avctx, AV_LOG_ERROR, "Not supported pixel format: %s\n", av_get_pix_fmt_name(avctx->pix_fmt));
-            
+
             return AVERROR_INVALIDDATA;
     }
 
@@ -210,13 +210,13 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
     av_image_copy(frame->data, frame->linesize, (const uint8_t **)imgb->a,
                   imgb->s, avctx->pix_fmt,
                   imgb->w[0], imgb->h[0]);
-    
-    
+
+
     if (frm_info->color_description_present_flag) {
         avctx->color_primaries = frm_info->color_primaries;
         avctx->color_trc = frm_info->transfer_characteristics;
         avctx->colorspace = frm_info->matrix_coefficients;
-        avctx->color_range = frm_info->full_range_flag ? AVCOL_RANGE_UNSPECIFIED : AVCOL_RANGE_MPEG;
+        avctx->color_range = frm_info->full_range_flag ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
     }
 
     return 0;
@@ -244,7 +244,7 @@ static av_cold int libapvd_init(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Cannot create apvd decoder\n");
         return AVERROR_EXTERNAL;
     }
-        
+
     /* create metadata container */
     apvctx->mid = oapvm_create(&ret);
     if(OAPV_FAILED(ret)) {
@@ -322,8 +322,8 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     if (pkt->size <= 0) {
         av_packet_unref(pkt);
         return ret;
-    }   
-    
+    }
+
     memset(&ofrms, 0, sizeof(oapv_frms_t));
     memset(&aui, 0, sizeof(oapv_au_info_t));
 
@@ -443,7 +443,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         if(apvctx->frames[i] == NULL) {
             apvctx->frames[i] = av_frame_alloc();
         }
-        
+
         /* Copy decoded image into AVFrame object */
         ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i], &stat.aui.frm_info[i]);
         if(ret < 0) {
@@ -466,7 +466,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             apvctx->frames[i]->pict_type = AV_PICTURE_TYPE_I;
             apvctx->frames[i]->flags |= AV_FRAME_FLAG_KEY;
         }
-        
+
         apvctx->frames_count++;
 
         /* Write the AVFrame data to the FIFO */
@@ -488,7 +488,7 @@ end:
         imgb_w->release(imgb_w);
         imgb_w = NULL;
     }
-    
+
     imgb_o = NULL;
 
     if (av_container_fifo_can_read(apvctx->output_fifo))
