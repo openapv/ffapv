@@ -1,6 +1,5 @@
 /*
- * liboapv encoder
- * Advanced Professional Video codec library
+ * APV (Advanced Professional Video) encoder using Open APV library (liboapv)
  *
  * Copyright (C) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
@@ -126,7 +125,7 @@ static AVFrame* copy_and_align_avframe_to_16(const AVFrame* src_frame) {
  *
  * @return APV pre-defined color format (@see oapv.h) on success, OAPV_CF_UNKNOWN on failure
  */
-static int libapve_apv_color_format(enum AVPixelFormat av_pix_fmt)
+static int liboapve_apv_color_format(enum AVPixelFormat av_pix_fmt)
 {
     int cf = OAPV_CF_UNKNOWN;
 
@@ -173,7 +172,7 @@ static int libapve_apv_color_format(enum AVPixelFormat av_pix_fmt)
  *
  * @return APV pre-defined color space (@see oapv.h) on success, OAPV_CS_UNKNOWN on failure
  */
-static int libapve_apv_color_space(enum AVPixelFormat av_pix_fmt)
+static int liboapve_apv_color_space(enum AVPixelFormat av_pix_fmt)
 {
     int cs = OAPV_CS_UNKNOWN;
 
@@ -299,7 +298,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         }
     }
 
-    apvctx->input_csp = libapve_apv_color_space(avctx->pix_fmt);
+    apvctx->input_csp = liboapve_apv_color_space(avctx->pix_fmt);
     if(apvctx->input_csp == OAPV_CS_UNKNOWN) {
         av_log(avctx, AV_LOG_ERROR, "Not supported pixel format: %s\n", av_get_pix_fmt_name (avctx->pix_fmt));
         return AVERROR_INVALIDDATA;
@@ -323,13 +322,13 @@ static int get_bit_depth(AVCodecContext *avctx, enum AVPixelFormat pixel_format)
 
 
 /**
- * @brief Initialize APV codec
+ * @brief Initialize OpenAPV encoder
  * Create an encoder instance and allocate all the needed resources
  *
  * @param avctx codec context
  * @return 0 on success, negative error code on failure
  */
-static av_cold int libapve_init(AVCodecContext *avctx)
+static av_cold int liboapve_init(AVCodecContext *avctx)
 {
     ApvEncContext *apvctx = avctx->priv_data;
     unsigned char *bs_buf = NULL;
@@ -353,7 +352,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
 
     /* read configurations and set values for created descriptor (APV_CDSC) */
     if ((ret = get_conf(avctx, cdsc)) != 0) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot get OAPV configuration\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot get oapv configuration\n");
         return AVERROR(EINVAL);
     }
 
@@ -371,7 +370,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     /* create encoder */
     apvctx->id = oapve_create(cdsc, &ret);
     if (apvctx->id == NULL) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot create OAPV encoder\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot create oapv encoder\n");
         if(ret==OAPV_ERR_INVALID_LEVEL) {
             av_log(avctx, AV_LOG_ERROR, "Invalid level idc: %d\n", cdsc->param[0].level_idc);
         }
@@ -381,7 +380,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     /* create metadata handler */
     apvctx->mid = oapvm_create(&ret);
     if(apvctx->mid == NULL || OAPV_FAILED(ret)) {
-        av_log(avctx, AV_LOG_ERROR, "cannot create OAPV metadata handler\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot create oapv metadata handler\n");
         return AVERROR_EXTERNAL;
     }
 
@@ -395,7 +394,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
     apvctx->imgb_i = NULL; // image buffer for input
     apvctx->num_frames = MAX_NUM_FRMS; // number of frames in an access unit
 
-    cfmt = libapve_apv_color_format(avctx->pix_fmt);
+    cfmt = liboapve_apv_color_format(avctx->pix_fmt);
 
     // create input and reconstruction image buffers
     memset(&apvctx->ifrms, 0, sizeof(oapv_frms_t));
@@ -411,7 +410,6 @@ static av_cold int libapve_init(AVCodecContext *avctx)
         apvctx->ifrms.num_frms++;
     }
 
-
     return 0;
 }
 
@@ -426,7 +424,7 @@ static av_cold int libapve_init(AVCodecContext *avctx)
   *
   * @return 0 on success, negative error code on failure
   */
-static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
+static int liboapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
                           const AVFrame *frame, int *got_packet)
 {
     ApvEncContext *apvctx =  avctx->priv_data;
@@ -516,7 +514,7 @@ static int libapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
  * @param avctx codec context
  * @return 0 on success, negative error code on failure
  */
-static av_cold int libapve_close(AVCodecContext *avctx)
+static av_cold int liboapve_close(AVCodecContext *avctx)
 {
     ApvEncContext *apvctx = avctx->priv_data;
     (void)apvctx;
@@ -579,7 +577,7 @@ static const AVOption liboapv_options[] = {
     { NULL }
 };
 
-static const AVClass libapve_class = {
+static const AVClass liboapve_class = {
     .class_name = "liboapv",
     .item_name  = av_default_item_name,
     .option     = liboapv_options,
@@ -590,23 +588,23 @@ static const AVClass libapve_class = {
  *  libavcodec generic global options, which can be set on all the encoders and decoders
  *  @see https://www.ffmpeg.org/ffmpeg-codecs.html#Codec-Options
  */
-static const FFCodecDefault libapve_defaults[] = {
+static const FFCodecDefault liboapve_defaults[] = {
     { "b", "0" },       // bitrate in terms of kilo-bits per second (support for bit-rates from a few hundred Mbps to a few Gbps for 2K, 4K and 8K resolution content)
     { "threads", "0"},  // number of threads to be used (0: automatically select the number of threads to set)
     { NULL },
 };
 
-const FFCodec ff_libapv_encoder = {
-    .p.name             = "liboapv",
-    .p.long_name        = NULL_IF_CONFIG_SMALL("liboapv APV"),
+const FFCodec ff_liboapv_encoder = {
+    .p.name             = "oapv",
+    .p.long_name        = NULL_IF_CONFIG_SMALL("OpenAPV / Open Advanced Professional Video"),
     .p.type             = AVMEDIA_TYPE_VIDEO,
     .p.id               = AV_CODEC_ID_APV,
-    .init               = libapve_init,
-    FF_CODEC_ENCODE_CB(libapve_encode),
-    .close              = libapve_close,
+    .init               = liboapve_init,
+    FF_CODEC_ENCODE_CB(liboapve_encode),
+    .close              = liboapve_close,
     .priv_data_size     = sizeof(ApvEncContext),
-    .p.priv_class       = &libapve_class,
-    .defaults           = libapve_defaults,
+    .p.priv_class       = &liboapve_class,
+    .defaults           = liboapve_defaults,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_DR1,
     .p.wrapper_name     = "liboapv",
     .p.profiles         = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
