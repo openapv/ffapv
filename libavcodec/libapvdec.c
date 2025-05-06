@@ -1,5 +1,5 @@
 /*
- * APV (Advanced Professional Video codec) decoding using APV codec library (liboapv)
+ * APV (Advanced Professional Video) decoder using Open APV library (liboapv)
  *
  * Copyright (C) 2025 Dawid Kozinski <d.kozinski@samsung.com>
  *
@@ -46,7 +46,7 @@
 #define APV_AU_SIZE_PREFIX_LENGTH (4)
 
 /**
- * The structure stores all the states associated with the instance of APV decoder
+ * The structure stores all the states associated with the instance of Open APV decoder
  */
 typedef struct ApvDecContext {
     const AVClass *class;
@@ -174,7 +174,7 @@ static int export_stream_params(const oapv_au_info_t* aui, AVCodecContext *avctx
  * @param[out] frame
  * @return 0 on success, negative value on failure
  */
-static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, struct AVFrame *frame, oapv_frm_info_t *frm_info)
+static int liboapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, struct AVFrame *frame, oapv_frm_info_t *frm_info)
 {
     int ret;
 
@@ -223,13 +223,13 @@ static int libapvd_image_copy(struct AVCodecContext *avctx, oapv_imgb_t *imgb, s
 }
 
 /**
- * Initialize decoder
+ * @brief Initialize OpenAPV decoder
  * Create a decoder instance and allocate all the needed resources
  *
  * @param avctx codec context
  * @return 0 on success, negative error code on failure
  */
-static av_cold int libapvd_init(AVCodecContext *avctx)
+static av_cold int liboapvd_init(AVCodecContext *avctx)
 {
     ApvDecContext *apvctx = avctx->priv_data;
     oapvd_cdesc_t *cdsc = &(apvctx->cdsc);
@@ -241,14 +241,14 @@ static av_cold int libapvd_init(AVCodecContext *avctx)
     /* create decoder instance */
     apvctx->id = oapvd_create(&(apvctx->cdsc), NULL);
     if (apvctx->id == NULL) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot create apvd decoder\n");
+        av_log(avctx, AV_LOG_ERROR, "Cannot create oapv decoder\n");
         return AVERROR_EXTERNAL;
     }
 
     /* create metadata container */
     apvctx->mid = oapvm_create(&ret);
     if(OAPV_FAILED(ret)) {
-        av_log(avctx, AV_LOG_ERROR, "ERROR: cannot create OAPV metadata container (err=%d)\n", ret);
+        av_log(avctx, AV_LOG_ERROR, "Cannot create oapv metadata container (err=%d)\n", ret);
         return AVERROR_EXTERNAL;
     }
 
@@ -283,7 +283,7 @@ static av_cold int libapvd_init(AVCodecContext *avctx)
   *
   * @return 0 on success, negative error code on failure
   */
-static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
 {
     ApvDecContext *apvctx = avctx->priv_data;
     AVPacket *pkt = apvctx->pkt;
@@ -445,7 +445,7 @@ static int libapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         }
 
         /* Copy decoded image into AVFrame object */
-        ret = libapvd_image_copy(avctx, imgb_o, apvctx->frames[i], &stat.aui.frm_info[i]);
+        ret = liboapvd_image_copy(avctx, imgb_o, apvctx->frames[i], &stat.aui.frm_info[i]);
         if(ret < 0) {
             av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
             av_frame_unref(apvctx->frames[i]);
@@ -510,7 +510,7 @@ do_output:
  * @param avctx codec context
  * @return 0 on success
  */
-static av_cold int libapvd_close(AVCodecContext *avctx)
+static av_cold int liboapvd_close(AVCodecContext *avctx)
 {
     ApvDecContext *apvctx = avctx->priv_data;
     if (apvctx->id) {
@@ -540,31 +540,31 @@ static av_cold int libapvd_close(AVCodecContext *avctx)
 
 // Consider using following options (./ffmpeg --help encoder=liboapv)
 //
-static const AVOption libapvd_options[] = {
+static const AVOption liboapvd_options[] = {
     { "output_csp", "Color space", OFFSET(output_csp),AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VD },
     { "output_depth", "Color space", OFFSET(output_depth),AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VD },
     { NULL }
 };
 
-static const AVClass libapvd_class = {
-    .class_name = "libapvd",
+static const AVClass liboapvd_class = {
+    .class_name = "liboapvd",
     .item_name  = av_default_item_name,
-    .option     = libapvd_options,
+    .option     = liboapvd_options,
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-const FFCodec ff_libapv_decoder = {
-    .p.name             = "apv",
-    .p.long_name        = NULL_IF_CONFIG_SMALL("APV / Advanced Professional Video"),
+const FFCodec ff_liboapv_decoder = {
+    .p.name             = "oapv",
+    .p.long_name        = NULL_IF_CONFIG_SMALL("OpenAPV / Open Advanced Professional Video"),
     .p.type             = AVMEDIA_TYPE_VIDEO,
     .p.id               = AV_CODEC_ID_APV,
-    .init               = libapvd_init,
-    FF_CODEC_RECEIVE_FRAME_CB(libapvd_receive_frame),
-    .close              = libapvd_close,
+    .init               = liboapvd_init,
+    FF_CODEC_RECEIVE_FRAME_CB(liboapvd_receive_frame),
+    .close              = liboapvd_close,
     .priv_data_size     = sizeof(ApvDecContext),
-    .p.priv_class       = &libapvd_class,
+    .p.priv_class       = &liboapvd_class,
     .p.capabilities     = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS | AV_CODEC_CAP_AVOID_PROBING,
-    .p.wrapper_name     = "libapvd",
+    .p.wrapper_name     = "liboapv",
     .p.profiles         = NULL_IF_CONFIG_SMALL(ff_apv_profiles),
     .caps_internal      = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_NOT_INIT_THREADSAFE | FF_CODEC_CAP_SETS_PKT_DTS | FF_CODEC_CAP_SETS_FRAME_PROPS
 };
