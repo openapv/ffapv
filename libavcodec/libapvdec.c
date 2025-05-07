@@ -554,7 +554,7 @@ static const AVClass liboapvd_class = {
 };
 
 const FFCodec ff_liboapv_decoder = {
-    .p.name             = "oapv",
+    .p.name             = "apv",
     .p.long_name        = NULL_IF_CONFIG_SMALL("OpenAPV / Open Advanced Professional Video"),
     .p.type             = AVMEDIA_TYPE_VIDEO,
     .p.id               = AV_CODEC_ID_APV,
