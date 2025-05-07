@@ -330,8 +330,8 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     pkt_fd = av_packet_clone(pkt);
     av_packet_unref(pkt);
 
-    bs_buf = pkt_fd->data + APV_AU_SIZE_PREFIX_LENGTH;
-    bs_buf_size = pkt_fd->size - APV_AU_SIZE_PREFIX_LENGTH;
+    bs_buf = pkt_fd->data;
+    bs_buf_size = pkt_fd->size;
 
     if (OAPV_FAILED(oapvd_info(bs_buf, bs_buf_size, &aui)))
     {
