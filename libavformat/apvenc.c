@@ -26,7 +26,7 @@ static int apv_write_packet(AVFormatContext *s, AVPacket *pkt)
     return 0;
 }
 const FFOutputFormat ff_apv_muxer = {
-    .p.name           = "oapv",
+    .p.name           = "apv",
     .p.long_name      = NULL_IF_CONFIG_SMALL("APV raw bitstream"),
     .p.extensions     = "apv",
     .p.audio_codec    = AV_CODEC_ID_NONE,
