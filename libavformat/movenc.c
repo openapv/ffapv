@@ -6884,6 +6884,11 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
             if (ret) {
                 goto err;
             }
+        } else if (par->codec_id == AV_CODEC_ID_APV) {
+            avio_wb32(s->pb, pkt->size);
+            size += 4;
+
+            avio_write(s->pb, pkt->data, pkt->size);
         } else {
             avio_write(pb, pkt->data, size);
         }
