@@ -18,6 +18,8 @@
 
 #include "libavcodec/apv.h"
 #include "libavcodec/bytestream.h"
+#include "libavcodec/get_bits.h"
+#include "libavutil/mem.h"
 
 #include "avformat.h"
 #include "avio_internal.h"
@@ -41,6 +43,13 @@ typedef struct APVHeaderInfo {
 
     enum AVPixelFormat pixel_format;
 } APVHeaderInfo;
+
+typedef struct APVColorDescription {
+    uint8_t  color_primaries;
+    uint8_t  transfer_characteristics;
+    uint8_t  matrix_coefficients;
+    uint8_t  full_range_flag;
+} APVColorDescription;
 
 static const enum AVPixelFormat apv_format_table[5][5] = {
     { AV_PIX_FMT_GRAY8,    AV_PIX_FMT_GRAY10,     AV_PIX_FMT_GRAY12,     AV_PIX_FMT_GRAY14, AV_PIX_FMT_GRAY16 },
@@ -114,6 +123,46 @@ static int apv_extract_header_info(APVHeaderInfo *info,
     return 1;
 }
 
+static int apv_extract_color_description(APVColorDescription *color_description,
+                                         uint8_t *color_description_present_flag,
+                                         GetByteContext *gbc)
+{
+    GetBitContext gb;
+    int ret = 0;
+
+    // color_description_present_flag                            | u(1)
+    // color_primaries                                           | u(8)
+    // transfer_characteristics                                  | u(8)
+    // matrix_coefficients                                       | u(8)
+    // full_range_flag                                           | u(1)
+    unsigned int bs_size = 4;
+    uint8_t *bs = av_malloc(bs_size);
+
+    int size = bytestream2_get_buffer(gbc, bs, bs_size);
+    if (size < bs_size) {
+        ret = AVERROR_INVALIDDATA;
+        goto end;
+    }
+
+    ret = init_get_bits8(&gb, bs, bs_size);
+    if (ret < 0) {
+        ret = AVERROR_INVALIDDATA;
+        goto end;
+    }
+
+    *color_description_present_flag = get_bits(&gb, 1);
+    if (*color_description_present_flag) {
+        color_description->color_primaries = get_bits(&gb, 8);
+        color_description->transfer_characteristics = get_bits(&gb, 8);
+        color_description->matrix_coefficients = get_bits(&gb, 8);
+        color_description->full_range_flag = get_bits(&gb, 1);
+    }
+
+end:
+    av_free(bs);
+    return ret;
+}
+
 static int apv_probe(const AVProbeData *p)
 {
     GetByteContext gbc;
@@ -149,6 +198,7 @@ static int apv_probe(const AVProbeData *p)
         // Header does not look like APV.
         return 0;
     }
+
     return AVPROBE_SCORE_MAX;
 }
 
@@ -157,8 +207,11 @@ static int apv_read_header(AVFormatContext *s)
     AVStream *st;
     GetByteContext gbc;
     APVHeaderInfo header;
-    uint8_t buffer[28];
+    APVColorDescription color_description;
+    uint8_t color_description_present_flag;
+    uint8_t buffer[28+5];
     uint32_t au_size, signature, pbu_size;
+    int zero;
     int err, size;
 
     err = ffio_ensure_seekback(s->pb, sizeof(buffer));
@@ -190,6 +243,14 @@ static int apv_read_header(AVFormatContext *s)
     if (err < 0)
         return err;
 
+    zero = bytestream2_get_byte(&gbc);
+    if (zero != 0)
+        return AVERROR_INVALIDDATA;
+
+    err = apv_extract_color_description(&color_description, &color_description_present_flag, &gbc);
+    if (err < 0)
+        return err;
+
     st = avformat_new_stream(s, NULL);
     if (!st)
         return AVERROR(ENOMEM);
@@ -201,6 +262,18 @@ static int apv_read_header(AVFormatContext *s)
     st->codecpar->level      = header.level_idc;
     st->codecpar->width      = header.frame_width;
     st->codecpar->height     = header.frame_height;
+
+    if (color_description_present_flag) {
+        st->codecpar->color_primaries = color_description.color_primaries;
+        st->codecpar->color_trc = color_description.transfer_characteristics;
+        st->codecpar->color_space = color_description.matrix_coefficients;
+        st->codecpar->color_range = (color_description.full_range_flag)?AVCOL_RANGE_JPEG:AVCOL_RANGE_MPEG;
+    } else  {
+        st->codecpar->color_primaries = AVCOL_PRI_UNSPECIFIED ;
+        st->codecpar->color_trc = AVCOL_TRC_UNSPECIFIED;
+        st->codecpar->color_space = AVCOL_SPC_UNSPECIFIED;
+        st->codecpar->color_range = AVCOL_RANGE_UNSPECIFIED;
+    }
 
     st->avg_frame_rate = (AVRational){ 30, 1 };
     avpriv_set_pts_info(st, 64, 1, 30);
@@ -232,7 +305,7 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
         av_log(s, AV_LOG_ERROR, "APV AU has invalid signature.\n");
         return AVERROR_INVALIDDATA;
     }
-    return ret;
+    return ret;\
 }
 
 const FFInputFormat ff_apv_demuxer = {
