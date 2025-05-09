@@ -55,6 +55,10 @@ static int parse(AVCodecParserContext *s,
     *poutbuf      = buf;
     *poutbuf_size = buf_size;
 
+    if (!buf_size) {
+        return 0;
+    }
+
     ref = av_buffer_create((uint8_t *)buf, buf_size, dummy_free,
                            (void *)buf, AV_BUFFER_FLAG_READONLY);
     if (!ref)
