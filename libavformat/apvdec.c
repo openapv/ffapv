@@ -101,6 +101,7 @@ static int apv_extract_header_info(GetByteContext *gbc)
         // Odd bit depths are technically valid but not useful here.
         return AVERROR_INVALIDDATA;
     }
+    
     // Ignore capture_time_distance.
     bytestream2_skip(gbc, 1);
 
@@ -202,7 +203,7 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     uint32_t au_size, signature;
     int ret;
-     
+
     au_size = avio_rb32(s->pb);
     if (au_size == 0 && avio_feof(s->pb))
         return AVERROR_EOF;
@@ -211,7 +212,7 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
                "APV AU has invalid size: %"PRIu32"\n", au_size);
         return AVERROR_INVALIDDATA;
     }
-     
+
     ret = av_get_packet(s->pb, pkt, au_size);
     if (ret < 0)
         return ret;
