@@ -384,6 +384,18 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
         return AVERROR_EXTERNAL;
     }
 
+    {
+        int size, value;
+
+        value = OAPV_CFG_VAL_AU_BS_FMT_NONE;
+        size = 4;
+        ret = oapve_config(apvctx->id, OAPV_CFG_SET_AU_BS_FMT, &value, &size);
+        if(OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Failed to set config for using encoder output format\n");
+            return AVERROR_EXTERNAL;
+        }
+    }
+
     apvctx->input_depth = get_bit_depth(avctx, avctx->pix_fmt);
     if(apvctx->input_depth != 10 && apvctx->input_depth != 12)  {
         av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format (%s)n", av_get_pix_fmt_name(avctx->pix_fmt));
