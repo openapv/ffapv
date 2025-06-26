@@ -18,12 +18,17 @@
 
 #include "libavcodec/apv.h"
 #include "libavcodec/bytestream.h"
+#include "libavutil/opt.h"
 
 #include "avformat.h"
 #include "avio_internal.h"
 #include "demux.h"
 #include "internal.h"
 
+typedef struct APVDemuxContext {
+    const AVClass *class;
+    AVRational framerate;
+} APVDemuxContext;
 
 typedef struct APVHeaderInfo {
     uint8_t  pbu_type;
@@ -151,6 +156,7 @@ static int apv_read_header(AVFormatContext *s)
     uint8_t buffer[12];
     uint32_t au_size, signature, pbu_size;
     int err, size;
+    APVDemuxContext *const c = s->priv_data;
 
     err = ffio_ensure_seekback(s->pb, sizeof(buffer));
     if (err < 0)
@@ -185,8 +191,8 @@ static int apv_read_header(AVFormatContext *s)
     st->codecpar->codec_id   = AV_CODEC_ID_APV;
 
     ffstream(st)->need_parsing = AVSTREAM_PARSE_HEADERS;
-    st->avg_frame_rate = (AVRational){ 30, 1 };
-    avpriv_set_pts_info(st, 64, 1, 30);
+    st->avg_frame_rate = c->framerate;
+    avpriv_set_pts_info(st, 64, 1, 25);
 
     avio_seek(s->pb, -size, SEEK_CUR);
 
@@ -221,12 +227,28 @@ static int apv_read_packet(AVFormatContext *s, AVPacket *pkt)
 
     return 0;
 }
+#define DEC AV_OPT_FLAG_DECODING_PARAM
+#define OFFSET(x) offsetof(APVDemuxContext, x)
+static const AVOption apv_options[] = {
+    { "framerate", "", OFFSET(framerate), AV_OPT_TYPE_VIDEO_RATE, {.str = "25"}, 0, INT_MAX, DEC},
+    { NULL },
+};
+#undef OFFSET
+
+static const AVClass apv_demuxer_class = {
+    .class_name = "APV demuxer",
+    .item_name  = av_default_item_name,
+    .option     = apv_options,
+    .version    = LIBAVUTIL_VERSION_INT,
+};
 
 const FFInputFormat ff_apv_demuxer = {
     .p.name         = "apv",
     .p.long_name    = NULL_IF_CONFIG_SMALL("APV raw bitstream"),
     .p.extensions   = "apv",
     .p.flags        = AVFMT_GENERIC_INDEX | AVFMT_NOTIMESTAMPS,
+    .p.priv_class   = &apv_demuxer_class,
+    .priv_data_size = sizeof(APVDemuxContext),
     .read_probe     = apv_probe,
     .read_header    = apv_read_header,
     .read_packet    = apv_read_packet,
