@@ -765,8 +765,6 @@ extern const FFCodec ff_pcm_mulaw_at_decoder;
 extern const FFCodec ff_qdmc_at_decoder;
 extern const FFCodec ff_qdm2_at_decoder;
 extern FFCodec ff_libaom_av1_encoder;
-extern const FFCodec ff_liboapv_encoder;
-extern const FFCodec ff_liboapv_decoder;
 
 /* preferred over libaribb24 */
 extern const FFCodec ff_libaribcaption_decoder;
@@ -792,6 +790,7 @@ extern const FFCodec ff_liblc3_encoder;
 extern const FFCodec ff_liblc3_decoder;
 extern const FFCodec ff_libmp3lame_encoder;
 extern const FFCodec ff_liboapv_encoder;
+extern const FFCodec ff_liboapv_decoder;
 extern const FFCodec ff_libopencore_amrnb_encoder;
 extern const FFCodec ff_libopencore_amrnb_decoder;
 extern const FFCodec ff_libopencore_amrwb_decoder;
