@@ -438,7 +438,13 @@ static av_cold int liboapve_close(AVCodecContext *avctx)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 
 static const enum AVPixelFormat supported_pixel_formats[] = {
+    AV_PIX_FMT_GRAY10,
     AV_PIX_FMT_YUV422P10,
+    AV_PIX_FMT_YUV422P12,
+    AV_PIX_FMT_YUV444P10,
+    AV_PIX_FMT_YUV444P12,
+    AV_PIX_FMT_YUVA444P10,
+    AV_PIX_FMT_YUVA444P12,
     AV_PIX_FMT_NONE
 };
 
