@@ -138,13 +138,14 @@ jobs:
           export "PATH=L$APV_DIR/bin:$PATH"
 
           echo "CFLAGS=$CFLAGS"
-          echo "LDLAGS=$LDLAGS"
+          echo "LDFLAGS=$LDFLAGS"
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
           ./configure \
-          --prefix="$PWD/build" --pkg-config-flags="--static" \
-          --extra-cflags="$CFLAGS" \ 
-          --extra-ldflags="$LDFLAGS" \
+          --prefix="$PWD/build" \
+          ${PKG_CONFIG_PATH:+--pkg-config-flags="--static"} \
+          ${CFLAGS:+--extra-cflags="$CFLAGS"} \ 
+          ${LDFLAGS:+--extra-ldflags="$LDFLAGS"} \
           --target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32- \
           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
