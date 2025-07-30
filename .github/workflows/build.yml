@@ -87,6 +87,7 @@ jobs:
               pkg-config
               tar
               curl
+              jq
             update: true
             msystem: MINGW64
 
