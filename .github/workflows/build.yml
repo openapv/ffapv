@@ -136,10 +136,16 @@ jobs:
           echo "LDFLAGS=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" >> $GITHUB_ENV
           echo "PATH=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/bin" >> $GITHUB_ENV
 
+      - name: Show FFmpeg config inputs
+        run: |
+          echo "CFLAGS=$CFLAGS"
+          echo "LDLAGS=$LDLAGS"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+
       - name: Build FFmpeg
         shell: msys2 {0}
         run: |
-          configure \
+          ./configure \
           --prefix="$PWD/build" --pkg-config-flags="--static" \
           --extra-cflags="$CFLAGS" \ 
           --extra-ldflags="$LDFLAGS" \
