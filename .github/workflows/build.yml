@@ -129,7 +129,7 @@ jobs:
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
           DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("win64.zip")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
           wget $DEPENDENCY_URL -O openapv.zip
-          sudo unzip openapv.zip -d /openapv
+          unzip openapv.zip -d /openapv
 
           echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib/pkgconfig" >> $GITHUB_ENV
           echo "CFLAGS=I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" >> $GITHUB_ENV
