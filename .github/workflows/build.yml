@@ -129,9 +129,9 @@ jobs:
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
           DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("win64.zip")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
           wget $DEPENDENCY_URL -O openapv.zip
-          unzip openapv.zip -d /openapv
+          unzip openapv.zip -d dep
 
-          APV_DIR=$(find OpenAPV -mindepth 1 -maxdepth 1 -type d -name "OpenAPV*")
+          APV_DIR=$(find dep -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*")
           echo "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig" >> $GITHUB_ENV
           echo "CFLAGS=I$APV_DIR/include" >> $GITHUB_ENV
           echo "LDFLAGS=L$APV_DIR/lib" >> $GITHUB_ENV
