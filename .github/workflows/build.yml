@@ -132,27 +132,35 @@ jobs:
           unzip openapv.zip -d dep
 
           APV_DIR=$(find dep -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*")
-          echo "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig" >> $GITHUB_ENV
-          echo "CFLAGS=I$APV_DIR/include" >> $GITHUB_ENV
-          echo "LDFLAGS=L$APV_DIR/lib" >> $GITHUB_ENV
-          echo "PATH=L$APV_DIR/bin:$PATH" >> $GITHUB_ENV
+          export "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig"
+          export "CFLAGS=I$APV_DIR/include"
+          export "LDFLAGS=L$APV_DIR/lib"
+          export "PATH=L$APV_DIR/bin:$PATH"
 
-      - name: Show FFmpeg config inputs
-        run: |
           echo "CFLAGS=$CFLAGS"
           echo "LDLAGS=$LDLAGS"
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
-      - name: Build FFmpeg
-        shell: msys2 {0}
-        run: |
           ./configure \
           --prefix="$PWD/build" --pkg-config-flags="--static" \
           --extra-cflags="$CFLAGS" \ 
           --extra-ldflags="$LDFLAGS" \
-          --target-os=mingw32 --arch=x86_64 --toolchain=msvc \
+          --target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32- \
           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
           make -j$(nproc)
           make install
+
+      # - name: Build FFmpeg
+      #   shell: msys2 {0}
+      #   run: |
+      #     ./configure \
+      #     --prefix="$PWD/build" --pkg-config-flags="--static" \
+      #     --extra-cflags="$CFLAGS" \ 
+      #     --extra-ldflags="$LDFLAGS" \
+      #     --target-os=mingw32 --arch=x86_64 --toolchain=msvc \
+      #     --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
+
+      #     make -j$(nproc)
+      #     make install
 
