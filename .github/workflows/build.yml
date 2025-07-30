@@ -139,10 +139,11 @@ jobs:
       - name: Build FFmpeg
         shell: msys2 {0}
         run: |
-          ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
+          ./configure \
+          --prefix="$PWD/build" --pkg-config-flags="--static" \
           --extra-cflags="$CFLAGS" \ 
           --extra-ldflags="$LDFLAGS" \
-          --target-os=mingw32 --arch=x86_64 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- \
+          --target-os=mingw32 --arch=x86_64 --toolchain=msvc \
           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
           make -j$(nproc)
