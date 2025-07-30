@@ -131,7 +131,7 @@ jobs:
           wget $DEPENDENCY_URL -O openapv.zip
           unzip openapv.zip -d /openapv
 
-          APV_DIR=$(find openapv -mindepth 1 -maxdepth 1 -type d -name "OpenAPV*")
+          APV_DIR=$(find OpenAPV -mindepth 1 -maxdepth 1 -type d -name "OpenAPV*")
           echo "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig" >> $GITHUB_ENV
           echo "CFLAGS=I$APV_DIR/include" >> $GITHUB_ENV
           echo "LDFLAGS=L$APV_DIR/lib" >> $GITHUB_ENV
