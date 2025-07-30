@@ -131,10 +131,10 @@ jobs:
           wget $DEPENDENCY_URL -O openapv.zip
           unzip openapv.zip -d /openapv
 
-          echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib/pkgconfig" >> $GITHUB_ENV
-          echo "CFLAGS=I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" >> $GITHUB_ENV
-          echo "LDFLAGS=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" >> $GITHUB_ENV
-          echo "PATH=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/bin" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE\openapv\OpenAPV-0.2.0.1-win64\lib\pkgconfig" >> $GITHUB_ENV
+          echo "CFLAGS=I$GITHUB_WORKSPACE\openapv\OpenAPV-0.2.0.1-win64\include" >> $GITHUB_ENV
+          echo "LDFLAGS=L$GITHUB_WORKSPACE\openapv\OpenAPV-0.2.0.1-win64\lib" >> $GITHUB_ENV
+          echo "PATH=L$GITHUB_WORKSPACE\openapv\OpenAPV-0.2.0.1-win64\bin" >> $GITHUB_ENV
 
       - name: Show FFmpeg config inputs
         run: |
