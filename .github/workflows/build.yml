@@ -69,44 +69,61 @@ jobs:
           ffmpeg -version
 
   build-windows:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            build-essential \
-            cmake \
-            git-core \
-            libass-dev \
-            libfreetype6-dev \
-            libgnutls28-dev \
-            libmp3lame-dev \
-            libsdl2-dev \
-            libtool \
-            libva-dev \
-            libvdpau-dev \
-            libvorbis-dev \
-            libxcb1-dev \
-            libxcb-shm0-dev \
-            libxcb-xfixes0-dev \
-            meson \
-            ninja-build \
-            pkg-config \
-            texinfo \
-            wget \
-            nasm \
-            zlib1g-dev
-          sudo apt-get install -y jq \
-            mingw-w64
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+            install: >-
+              git
+              mingw-w64-X86_64-toolchain
+              make
+              yasm
+              unzip
+              pkg-config
+              tar
+              curl
+            update: true
+            msystem: MINGW64
+
+
+      # - name: Install build dependencies
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y \
+      #       autoconf \
+      #       automake \
+      #       build-essential \
+      #       cmake \
+      #       git-core \
+      #       libass-dev \
+      #       libfreetype6-dev \
+      #       libgnutls28-dev \
+      #       libmp3lame-dev \
+      #       libsdl2-dev \
+      #       libtool \
+      #       libva-dev \
+      #       libvdpau-dev \
+      #       libvorbis-dev \
+      #       libxcb1-dev \
+      #       libxcb-shm0-dev \
+      #       libxcb-xfixes0-dev \
+      #       meson \
+      #       ninja-build \
+      #       pkg-config \
+      #       texinfo \
+      #       wget \
+      #       nasm \
+      #       zlib1g-dev
+      #     sudo apt-get install -y jq \
+      #       mingw-w64
 
       - name: Fetch and install openAPV dependency
+        shell: msys2 {0}
         run: |
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
           DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("win64.zip")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
@@ -119,6 +136,7 @@ jobs:
           echo "PATH=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/bin" >> $GITHUB_ENV
 
       - name: Build FFmpeg
+        shell: msys2 {0}
         run: |
           ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
           --extra-cflags="$CFLAGS" \ 
@@ -127,4 +145,5 @@ jobs:
           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
           make -j$(nproc)
-          
+          make install
+            
