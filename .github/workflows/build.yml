@@ -80,7 +80,7 @@ jobs:
         with:
             install: >-
               git
-              mingw-w64-X86_64-toolchain
+              mingw-w64-x86_64-toolchain
               make
               yasm
               unzip
@@ -146,4 +146,4 @@ jobs:
 
           make -j$(nproc)
           make install
-            
+
