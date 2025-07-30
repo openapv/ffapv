@@ -139,7 +139,7 @@ jobs:
       - name: Build FFmpeg
         shell: msys2 {0}
         run: |
-          ./configure \
+          configure \
           --prefix="$PWD/build" --pkg-config-flags="--static" \
           --extra-cflags="$CFLAGS" \ 
           --extra-ldflags="$LDFLAGS" \
