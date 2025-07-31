@@ -117,7 +117,7 @@ jobs:
           wget $DEPENDENCY_URL -O openapv.zip
           sudo unzip openapv.zip -d openapv
 
-          APV_DIR=$(find dep -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*")
+          #APV_DIR=$(find openapv -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*")
           
           # export "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig"
           # export "CFLAGS=-I$APV_DIR/include"
