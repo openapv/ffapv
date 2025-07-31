@@ -135,11 +135,13 @@ jobs:
           echo "--------------------------------------------------------------------------------"
 
           ./configure --pkg-config-flags="--static" \
-          # ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
+          ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
           # --extra-cflags="$CFLAGS" \ 
           # --extra-ldflags="$LDFLAGS" \
-          --extra-cflags=-I$APV_DIR/include \ 
-          --extra-ldflags="-L$APV_DIR/lib" \
+          # --extra-cflags="-I$APV_DIR/include" \ 
+          # --extra-ldflags="-L$APV_DIR/lib" \
+          --extra-cflags="-I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" \ 
+          --extra-ldflags="-L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" \
           --arch=x86_64 --target-os=mingw32 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- \
           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
