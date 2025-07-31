@@ -117,36 +117,13 @@ jobs:
           wget $DEPENDENCY_URL -O openapv.zip
           unzip openapv.zip -d openapv
 
-          #APV_DIR=$(find openapv -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*")
-          
-          # export "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig"
-          # export "CFLAGS=-I$APV_DIR/include"
-          # export "LDFLAGS=-L$APV_DIR/lib"
-          # export "PATH=L$APV_DIR/bin:$PATH"
-          # echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib/pkgconfig" >> $GITHUB_ENV
-          # echo "CFLAGS=I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" >> $GITHUB_ENV
-          # echo "LDFLAGS=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" >> $GITHUB_ENV
-          # echo "PATH=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/bin" >> $GITHUB_ENV
-          # echo "CFLAGS=$CFLAGS"
-          # echo "LDFLAGS=$LDFLAGS"
-          # echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          echo " DEBUG START --------------------------------------------------------------------------------"
-          pwd
-          ls -al
-          echo "-----------"
-          ls openapv
-          ls openapv/OpenAPV-0.2.0.1-win64/
-          echo " DEBUG STOP --------------------------------------------------------------------------------"
+          APV_DIR=$(find openapv -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*-win64")
 
           ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
-          # --extra-cflags="$CFLAGS" \ 
-          # --extra-ldflags="$LDFLAGS" \
-          # --extra-cflags="-I$APV_DIR/include" \ 
-          # --extra-ldflags="-L$APV_DIR/lib" \
-          --extra-cflags="-I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" \ 
-          --extra-ldflags="-L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" \
-          --arch=x86_64 --target-os=mingw32 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- \
-          --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
+           --extra-cflags="-I$GITHUB_WORKSPACE/$APV_DIR/include" \ 
+           --extra-ldflags="-L$GITHUB_WORKSPACE/$APV_DIR/lib" \
+           --arch=x86_64 --target-os=mingw32 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- \
+           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
           make -j$(nproc)
 
