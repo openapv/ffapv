@@ -115,14 +115,14 @@ jobs:
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
           DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("win64.zip")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
           wget $DEPENDENCY_URL -O openapv.zip
-          sudo unzip openapv.zip -d dep
+          sudo unzip openapv.zip -d openapv
 
           APV_DIR=$(find dep -mindepth 1 -maxdepth 2 -type d -name "OpenAPV*")
           
           # export "PKG_CONFIG_PATH=$APV_DIR/lib/pkgconfig"
           # export "CFLAGS=-I$APV_DIR/include"
           # export "LDFLAGS=-L$APV_DIR/lib"
-          # # export "PATH=L$APV_DIR/bin:$PATH"
+          # export "PATH=L$APV_DIR/bin:$PATH"
           # echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib/pkgconfig" >> $GITHUB_ENV
           # echo "CFLAGS=I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" >> $GITHUB_ENV
           # echo "LDFLAGS=L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" >> $GITHUB_ENV
@@ -130,16 +130,20 @@ jobs:
           # echo "CFLAGS=$CFLAGS"
           # echo "LDFLAGS=$LDFLAGS"
           # echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          echo "DEBUG START --------------------------------------------------------------------------------"
+          echo " DEBUG START --------------------------------------------------------------------------------"
           pwd
           ls -al
-          echo "DEBUG STOP --------------------------------------------------------------------------------"
-
-
+          echo "-----------"
+          ls openapv
+          echo " DEBUG STOP --------------------------------------------------------------------------------"
 
           ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
-          --extra-cflags="-I$APV_DIR/include" \ 
-          --extra-ldflags="-L$APV_DIR/lib" \
+          # --extra-cflags="$CFLAGS" \ 
+          # --extra-ldflags="$LDFLAGS" \
+          # --extra-cflags="-I$APV_DIR/include" \ 
+          # --extra-ldflags="-L$APV_DIR/lib" \
+          --extra-cflags="-I$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/include" \ 
+          --extra-ldflags="-L$GITHUB_WORKSPACE/openapv/OpenAPV-0.2.0.1-win64/lib" \
           --arch=x86_64 --target-os=mingw32 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- \
           --enable-sdl2 --enable-gpl --enable-ffplay --enable-liboapv \
 
