@@ -134,7 +134,6 @@ jobs:
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           echo "--------------------------------------------------------------------------------"
 
-          ./configure --pkg-config-flags="--static" \
           ./configure --prefix="$GITHUB_WORKSPACE/build" --pkg-config-flags="--static" \
           # --extra-cflags="$CFLAGS" \ 
           # --extra-ldflags="$LDFLAGS" \
