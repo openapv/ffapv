@@ -1,3 +1,6 @@
+[![Build OAPV_FFmpeg](https://github.com/openapv/ffapv/actions/workflows/build.yml/badge.svg)](https://github.com/openapv/ffapv/actions/workflows/build.yml)
+
+
 FFmpeg README
 =============
 
