@@ -1,3 +1,5 @@
+[![Build OAPV_FFmpeg](https://github.com/openapv/ffapv/actions/workflows/build.yml/badge.svg)](https://github.com/openapv/ffapv/actions/workflows/build.yml)
+
 # FFmpeg with OpenAPV support
 
 This project contains FFmpeg project implementation with added support for APV codec using fully OpenAPV library.  
