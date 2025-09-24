@@ -26,6 +26,7 @@
 #include "libavutil/mem.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/container_fifo.h"
+#include "libavutil/avassert.h"
 
 #include "codec_internal.h"
 #include "profiles.h"
@@ -62,8 +63,10 @@ static int apv_imgb_release(oapv_imgb_t *imgb)
 {
     int refcnt = --imgb->refcnt;
     if (refcnt == 0) {
-        for (int i = 0; i < imgb->np; i++)
+        for (int i = 0; i < imgb->np; i++) {
             av_freep(&imgb->baddr[i]);
+        }
+
         av_freep(&imgb);
     }
 
@@ -99,129 +102,13 @@ static void apv_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
     }
 }
 
-static void apv_imgb_cpy_shift_left_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
-{
-    int            i, j, k;
-
-    unsigned char *s;
-    short         *d;
-
-    for(i = 0; i < dst->np; i++) {
-        s = (unsigned char *)src->a[i];
-        d = (short *)dst->a[i];
-
-        for(j = 0; j < src->ah[i]; j++) {
-            for(k = 0; k < src->aw[i]; k++) {
-                d[k] = (short)(s[k] << shift);
-            }
-            s = s + src->s[i];
-            d = (short *)(((unsigned char *)d) + dst->s[i]);
-        }
-    }
-}
-
-static void apv_imgb_cpy_shift_right_8b(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
-{
-    int i, j, k, t0, add;
-
-    short *s;
-    unsigned char *d;
-
-    if(shift)
-        add = 1 << (shift - 1);
-    else
-        add = 0;
-
-    for(i = 0; i < dst->np; i++) {
-        s = (short *)src->a[i];
-        d = (unsigned char *)dst->a[i];
-
-        for(j = 0; j < src->ah[i]; j++) {
-            for(k = 0; k < src->aw[i]; k++) {
-                t0 = ((s[k] + add) >> shift);
-                d[k] = (unsigned char)(OAPV_IMG_CLIP_VAL(t0, 0, 255));
-            }
-            s = (short *)(((unsigned char *)s) + src->s[i]);
-            d = d + dst->s[i];
-        }
-    }
-}
-
-static void apv_imgb_cpy_shift_left(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
-{
-    int i, j, k;
-
-    unsigned short *s;
-    unsigned short *d;
-
-    for(i = 0; i < dst->np; i++) {
-        s = (unsigned short *)src->a[i];
-        d = (unsigned short *)dst->a[i];
-
-        for(j = 0; j < src->h[i]; j++) {
-            for(k = 0; k < src->w[i]; k++) {
-                d[k] = (unsigned short)(s[k] << shift);
-            }
-            s = (unsigned short *)(((unsigned char *)s) + src->s[i]);
-            d = (unsigned short *)(((unsigned char *)d) + dst->s[i]);
-        }
-    }
-}
-
-static void apv_imgb_cpy_shift_right(oapv_imgb_t *dst, oapv_imgb_t *src, int shift)
-{
-    int i, j, k, t0, add;
-
-    int clip_min = 0;
-    int clip_max = 0;
-
-    unsigned short *s;
-    unsigned short *d;
-
-    if(shift)
-        add = 1 << (shift - 1);
-    else
-        add = 0;
-
-    clip_max = (1 << (OAPV_CS_GET_BIT_DEPTH(dst->cs))) - 1;
-
-    for(i = 0; i < dst->np; i++) {
-        s = (unsigned short *)src->a[i];
-        d = (unsigned short *)dst->a[i];
-
-        for(j = 0; j < src->h[i]; j++) {
-            for(k = 0; k < src->w[i]; k++) {
-                t0 = ((s[k] + add) >> shift);
-                d[k] = (OAPV_IMG_CLIP_VAL(t0, clip_min, clip_max));
-            }
-            s = (unsigned short *)(((unsigned char *)s) + src->s[i]);
-            d = (unsigned short *)(((unsigned char *)d) + dst->s[i]);
-        }
-    }
-}
-
 static void apv_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, AVCodecContext *avctx)
 {
-    int i, bd_src, bd_dst;
-    bd_src = OAPV_CS_GET_BIT_DEPTH(src->cs);
-    bd_dst = OAPV_CS_GET_BIT_DEPTH(dst->cs);
-
+    int i;
+    
     if(src->cs == dst->cs) {
         apv_imgb_cpy_plane(dst, src);
-    }
-    else if(bd_src == 8 && bd_dst > 8) {
-        apv_imgb_cpy_shift_left_8b(dst, src, bd_dst - bd_src);
-    }
-    else if(bd_src > 8 && bd_dst == 8) {
-        apv_imgb_cpy_shift_right_8b(dst, src, bd_src - bd_dst);
-    }
-    else if(bd_src < bd_dst) {
-        apv_imgb_cpy_shift_left(dst, src, bd_dst - bd_src);
-    }
-    else if(bd_src > bd_dst) {
-        apv_imgb_cpy_shift_right(dst, src, bd_src - bd_dst);
-    }
-    else {
+    } else {
         av_log(avctx, AV_LOG_ERROR, "ERROR: unsupported image copy\n");
         return;
     }
@@ -234,76 +121,107 @@ static void apv_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, AVCodecContext *avc
     }
 }
 
+/**
+ * @brief Converts liboapv color space into AVPixelFormat
+ *
+ * @param[in] cs libopav color space
+ * @return AVPixelFormat
+ */
+static enum AVPixelFormat get_pixel_format(int cs)
+{
+    enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
+
+    switch(cs) {
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 0):  // profile 33
+        pix_fmt = AV_PIX_FMT_YUV422P10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 1):
+        pix_fmt = AV_PIX_FMT_YUV422P10BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 0):  // profile 44
+        pix_fmt = AV_PIX_FMT_YUV422P12LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 1):
+        pix_fmt = AV_PIX_FMT_YUV422P12BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 0):  // profile 55
+        pix_fmt = AV_PIX_FMT_YUV444P10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 1):
+        pix_fmt = AV_PIX_FMT_YUV444P10BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 0):   // profile 66
+        pix_fmt = AV_PIX_FMT_YUV444P12LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 1):
+        pix_fmt = AV_PIX_FMT_YUV444P12BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 0):  // profile 77
+        pix_fmt = AV_PIX_FMT_YUVA444P10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 1):
+        pix_fmt = AV_PIX_FMT_YUVA444P10BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 0):  // profile 88
+        pix_fmt = AV_PIX_FMT_YUVA444P12LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 1):
+        pix_fmt = AV_PIX_FMT_YUVA444P12BE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 0):   // profile 99
+        pix_fmt = AV_PIX_FMT_GRAY10LE;
+        break;
+    case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1):
+        pix_fmt = AV_PIX_FMT_GRAY10BE;
+        break;
+    default:
+        pix_fmt = AV_PIX_FMT_NONE;
+        break;
+    }
+
+    return pix_fmt;
+}
+
 static oapv_imgb_t *apv_imgb_create(int w, int h, int cs, AVCodecContext *avctx)
 {
-    oapv_imgb_t *imgb = NULL;
+
+    oapv_imgb_t *imgb;
+
+    enum AVPixelFormat pix_fmt = get_pixel_format(cs);
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+
+    av_assert0(desc);
 
     imgb = av_mallocz(sizeof(oapv_imgb_t));
     if (!imgb)
         goto fail;
 
-    memset(imgb, 0, sizeof(oapv_imgb_t));
+    imgb->np = desc->nb_components;
 
-    if(OAPV_CS_GET_BIT_DEPTH(cs)!=10 && OAPV_CS_GET_BIT_DEPTH(cs)!=12) {
-        av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format\n");
-        goto fail;
-    }
-
-    imgb->w[0] = w;
-    imgb->h[0] = h;
-
-    switch(OAPV_CS_GET_FORMAT(cs))
-    {
-    case OAPV_CF_YCBCR422: // profile 33 (10bit), profile 44 (12bit)
-        imgb->w[1] = imgb->w[2] = (w + 1) >> 1;
-        imgb->h[1] = imgb->h[2] = h;
-        imgb->np = 3;
-        break;
-    case OAPV_CF_YCBCR444: // profile 55 (10bit), profile 66 (12bit)
-        imgb->w[1] = imgb->w[2] = w;
-        imgb->h[1] = imgb->h[2] = h;
-        imgb->np = 3;
-        break;
-   case OAPV_CF_YCBCR4444: // profile 77 (10bit), profile 88 (12bit)
-        imgb->w[1] = imgb->w[2] = imgb->w[3] = w;
-        imgb->h[1] = imgb->h[2] = imgb->h[3] = h;
-        imgb->np = 4;
-        break;
-    case OAPV_CF_YCBCR400: // profile 99 (10bit)
-        imgb->w[1] = imgb->w[2] = w;
-        imgb->h[1] = imgb->h[2] = h;
-        imgb->np = 1;
-        break;
-    default:
-        av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format\n");
-        goto fail;
-    }
-
-    for(int i = 0; i < imgb->np; i++)
-    {
+    for (int i = 0; i < imgb->np; i++) {
+        imgb->w[i]  = w >> ((i == 1 || i == 2) ? desc->log2_chroma_w : 0);
+        imgb->h[i]  = h;
         imgb->aw[i] = FFALIGN(imgb->w[i], OAPV_MB_W);
         imgb->ah[i] = FFALIGN(imgb->h[i], OAPV_MB_H);
-        imgb->s[i] = imgb->aw[i] * OAPV_CS_GET_BYTE_DEPTH(cs);
-        imgb->e[i] = imgb->ah[i];
+        imgb->s[i]  = imgb->aw[i] * OAPV_CS_GET_BYTE_DEPTH(cs);
 
-        imgb->bsize[i] = imgb->s[i] * imgb->e[i];
+        imgb->bsize[i] = imgb->e[i] = imgb->s[i] * imgb->ah[i];
         imgb->a[i] = imgb->baddr[i] = av_mallocz(imgb->bsize[i]);
         if (imgb->a[i] == NULL)
             goto fail;
-
-        memset(imgb->a[i], 0, imgb->bsize[i]);
     }
+
+    // obiekt nie bedzie obiektem refcount. odpowiedzialnosc za zarzadzanie zyciem 
     imgb->cs = cs;
+
     imgb->addref = apv_imgb_addref;
     imgb->getref = apv_imgb_getref;
     imgb->release = apv_imgb_release;
+    imgb->refcnt = 1;
 
-    imgb->addref(imgb); /* increase reference count */
     return imgb;
-
 fail:
     av_log(avctx, AV_LOG_ERROR, "Cannot create image buffer\n");
-
     if (imgb) {
         for (int i = 0; i < imgb->np; i++)
             av_freep(&imgb->a[i]);
@@ -351,62 +269,18 @@ static void export_stream_params(AVCodecContext *avctx, const AVFrame* frame)
 /**
  * @brief The function populates frame based on information from frm_info
  *
- * @param avctx codec context
  * @param[out] frame
  * @param[in] frm_info
  * @return 0 on success, negative value on failure
  */
-static int set_frame_metadata(AVCodecContext *avctx, AVFrame* frame, const oapv_frm_info_t* frm_info)
+static int set_frame_metadata(AVFrame* frame, const oapv_frm_info_t* frm_info)
 {
     frame->width = frm_info->w;
     frame->height = frm_info->h;
 
-    switch(frm_info->cs) {
-    case OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 0):  // profile 33
-        frame->format = AV_PIX_FMT_YUV422P10LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR422, 10, 1):
-        frame->format = AV_PIX_FMT_YUV422P10BE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 0):  // profile 44
-        frame->format = AV_PIX_FMT_YUV422P12LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR422, 12, 1):
-        frame->format = AV_PIX_FMT_YUV422P12BE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 0):  // profile 55
-        frame->format = AV_PIX_FMT_YUV444P10LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR444, 10, 1):
-        frame->format = AV_PIX_FMT_YUV444P10BE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 0):   // profile 66
-        frame->format = AV_PIX_FMT_YUV444P12LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR444, 12, 1):
-        frame->format = AV_PIX_FMT_YUV444P12BE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 0):  // profile 77
-        frame->format = AV_PIX_FMT_YUVA444P10LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 10, 1):
-        frame->format = AV_PIX_FMT_YUVA444P10BE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 0):  // profile 88
-        frame->format = AV_PIX_FMT_YUVA444P12LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR4444, 12, 1):
-        frame->format = AV_PIX_FMT_YUVA444P12BE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 0):   // profile 99
-        frame->format = AV_PIX_FMT_GRAY10LE;
-        break;
-    case OAPV_CS_SET(OAPV_CF_YCBCR400, 10, 1):
-        frame->format = AV_PIX_FMT_GRAY10BE;
-        break;
-    default:
-        av_log(avctx, AV_LOG_ERROR, "Unknown color space\n");
-        frame->format = AV_PIX_FMT_NONE;
+    frame->format = get_pixel_format(frm_info->cs);
+
+    if(frame->format == AV_PIX_FMT_NONE) {
         return AVERROR_INVALIDDATA;
     }
 
@@ -419,17 +293,63 @@ static int set_frame_metadata(AVCodecContext *avctx, AVFrame* frame, const oapv_
     return 0;
 }
 
+static void av_buffer_free(void *opaque, uint8_t *data) {
+    av_free(data);
+}
+
 /**
- * @brief The function copies image data from imgb into frame
- *
- * @param avctx codec context
- * @param[out] frame
- * @param[in] imgb
+ * @brief Transferring video frame data from the source oapv_imgb_t object to the target AVFrame object
+ * 
+ * @param frame dst
+ * @param imgb src
  * @return 0 on success, negative value on failure
  */
-static int set_frame_data(AVCodecContext *avctx, AVFrame *frame, const oapv_imgb_t *imgb)
+static int move_frame_data(AVFrame *frame, oapv_imgb_t *imgb)
 {
-    int ret;
+    for (int i = 0; i < imgb->np; i++) {
+
+        int plane_size = imgb->w[i] * imgb->h[i] * OAPV_CS_GET_BYTE_DEPTH(imgb->cs);
+
+        frame->linesize[i] = imgb->w[i] * OAPV_CS_GET_BYTE_DEPTH(imgb->cs);
+
+        // Create reference-counted buffers from existing array for AVFrame
+        // Transferring the data (a buffer containing plane data) to the AVBufferRef object
+        // The data is owned by the AVBuffer
+        frame->buf[i] = av_buffer_create(imgb->a[i], plane_size, av_buffer_free, NULL, 0);
+        if(frame->buf[i] == NULL) {
+            return AVERROR_INVALIDDATA;
+        }    
+
+        frame->data[i] = frame->buf[i]->data;
+        
+        // Leave the source object in a state that allows it to be safely deleted
+        // Reset buffer pointers to ensure the source object is in a safe destruction state
+        // (set pointer variable members to NULL to avoid double memory deallocation)
+        imgb->a[i] = NULL;
+        imgb->baddr[i] = NULL;
+
+        imgb->bsize[i] = 0;
+        imgb->w[i] = 0;
+        imgb->h[i] = 0;
+        imgb->aw[i] = 0;
+        imgb->ah[i] = 0;
+        imgb->s[i] = 0;
+        imgb->e[i] = 0;
+    }
+    return 0;
+}
+
+/**
+ * @brief The function moves image data from imgb into frame
+ *
+ * @param avctx codec context
+ * @param[out] frame dst
+ * @param[in] imgb src
+ * @return 0 on success, negative value on failure
+ */
+static int set_frame_data(AVCodecContext *avctx, AVFrame *frame, oapv_imgb_t *imgb)
+{
+    int ret = 0;
 
     if (imgb->w[0] != avctx->width || imgb->h[0] != avctx->height) { // stream resolution changed
         if (ff_set_dimensions(avctx, imgb->w[0], imgb->h[0]) < 0) {
@@ -438,14 +358,9 @@ static int set_frame_data(AVCodecContext *avctx, AVFrame *frame, const oapv_imgb
         }
     }
 
-    if (ret = ff_get_buffer(avctx, frame, 0) < 0)
-        return ret;
+    ret = move_frame_data(frame, imgb);
 
-    av_image_copy(frame->data, frame->linesize, (const uint8_t **)imgb->a,
-                  imgb->s, avctx->pix_fmt,
-                  imgb->w[0], imgb->h[0]);
-
-    return 0;
+    return ret;
 }
 
 static int decode_metadata(AVCodecContext *avctx, AVFrame *frame, const APVRawMetadataPayload *payloads, uint32_t metadata_count)
@@ -769,7 +684,7 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             }
 
             /* Set frame info into AVFrame object */
-            ret = set_frame_metadata(avctx, apvctx->frames[j], &stat.aui.frm_info[i]);
+            ret = set_frame_metadata(apvctx->frames[j], &stat.aui.frm_info[i]);
             if(ret < 0) {
                 av_log(avctx, AV_LOG_ERROR, "Frame info setting error\n");
                 av_frame_unref(apvctx->frames[j]);
@@ -777,10 +692,10 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 goto end;
             }
 
-            /* Copy decoded image into AVFrame object */
+            /* Move decoded frame data form oapv_imgb_t into AVFrame object */
             ret = set_frame_data(avctx, apvctx->frames[j], imgb_o);
             if(ret < 0) {
-                av_log(avctx, AV_LOG_ERROR, "Image copying error\n");
+                av_log(avctx, AV_LOG_ERROR, "Frame data moving error\n");
                 av_frame_unref(apvctx->frames[j]);
 
                 goto end;
