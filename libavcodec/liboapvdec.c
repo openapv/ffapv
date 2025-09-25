@@ -308,9 +308,11 @@ static int move_frame_data(AVFrame *frame, oapv_imgb_t *imgb)
 {
     for (int i = 0; i < imgb->np; i++) {
 
-        int plane_size = imgb->w[i] * imgb->h[i] * OAPV_CS_GET_BYTE_DEPTH(imgb->cs);
+        int aw = FFALIGN(imgb->w[i], OAPV_MB_W);
+        int ah = FFALIGN(imgb->h[i], OAPV_MB_H);
+        int plane_size = aw * ah * OAPV_CS_GET_BYTE_DEPTH(imgb->cs);
 
-        frame->linesize[i] = imgb->w[i] * OAPV_CS_GET_BYTE_DEPTH(imgb->cs);
+        frame->linesize[i] = aw * OAPV_CS_GET_BYTE_DEPTH(imgb->cs);
 
         // Create reference-counted buffers from existing array for AVFrame
         // Transferring the data (a buffer containing plane data) to the AVBufferRef object
