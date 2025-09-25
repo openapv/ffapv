@@ -211,9 +211,7 @@ static oapv_imgb_t *apv_imgb_create(int w, int h, int cs, AVCodecContext *avctx)
             goto fail;
     }
 
-    // obiekt nie bedzie obiektem refcount. odpowiedzialnosc za zarzadzanie zyciem 
     imgb->cs = cs;
-
     imgb->addref = apv_imgb_addref;
     imgb->getref = apv_imgb_getref;
     imgb->release = apv_imgb_release;
