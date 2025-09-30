@@ -5,6 +5,7 @@ project(ffapvTests)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Update periodically release url to latest version
 include(FetchContent)
 FetchContent_Declare(
   googletest

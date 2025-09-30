@@ -46,7 +46,7 @@ TEST_P(FFmpegCmdPerfTest, EncodeDecode) {
     std::string encodeCmd =
         "ffmpeg -y -f rawvideo -pix_fmt yuv422p10le -s:v " + p.resolution +
         " -i " + inputFile +
-        " -c:v " + p.codec + encodedFile +
+        " -c:v " + p.codec + " " +encodedFile +
         " > /dev/null 2>&1";
 
     long long encTime = RunCommandAndMeasure(encodeCmd);
