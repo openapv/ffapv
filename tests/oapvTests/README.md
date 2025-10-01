@@ -10,3 +10,9 @@ cmake --build build
 cd build
 ctest
 ```
+
+or 
+
+```
+./oapv_tests --gtest_output=xml:test_results.xml
+```

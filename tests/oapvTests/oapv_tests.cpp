@@ -55,7 +55,7 @@ TEST_P(FFmpegCmdPerfTest, EncodeDecode) {
     // Record encode timing into gtest XML
     RecordProperty("encode_time_ms", encTime);
 
-    // Decode
+    // Decode native
     std::string decodeCmd =
         "ffmpeg -y -i " + encodedFile +
         " -f rawvideo -pix_fmt yuv422p10le " + decodedFile +
@@ -67,9 +67,22 @@ TEST_P(FFmpegCmdPerfTest, EncodeDecode) {
     // Record decode timing into gtest XML
     RecordProperty("decode_time_ms", decTime);
 
+    // Decode oapv
+    std::string decodeOapvCmd =
+        "ffmpeg -y -i " + encodedFile +
+        " -f rawvideo -pix_fmt yuv422p10le " + decodedFile +
+        " > /dev/null 2>&1";
+
+    long long decOapvTime = RunCommandAndMeasure(decodeOapvCmd);
+    std::cout << "[" << p.name << "] Decoding took " << decOapvTime << " ms\n";
+
+    // Record decode timing into gtest XML
+    RecordProperty("decode_time_ms", decOapvTime);
+
     // Optional thresholds
     EXPECT_LT(encTime, 5000);
     EXPECT_LT(decTime, 5000);
+    EXPECT_LT(decOapvTime, 5000);
 }
 
 // Add here more tests combinations!
@@ -77,11 +90,11 @@ INSTANTIATE_TEST_SUITE_P(
     FFmpegBenchmarks,
     FFmpegCmdPerfTest,
     ::testing::Values(
-        FFmpegParams{"liboapv", "320x240", "oapv_240p"},
-        FFmpegParams{"liboapv", "1280x720", "oapv_720p"},
-        FFmpegParams{"liboapv", "1920x1080", "oapv_1080p"},
-        FFmpegParams{"liboapv", "4096x2160", "oapv_4k"},
-        FFmpegParams{"liboapv", "7680x4320", "oapv_8k"}
+        FFmpegParams{"liboapv", "320x240", "apv_240p"},
+        FFmpegParams{"liboapv", "1280x720", "apv_720p"},
+        FFmpegParams{"liboapv", "1920x1080", "apv_1080p"},
+        FFmpegParams{"liboapv", "4096x2160", "apv_4k"},
+        FFmpegParams{"liboapv", "7680x4320", "apv_8k"}
     ),
     [](const ::testing::TestParamInfo<FFmpegCmdPerfTest::ParamType>& info) {
         return info.param.name; // readable test case name
