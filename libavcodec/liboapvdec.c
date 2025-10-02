@@ -503,8 +503,6 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     oapv_au_info_t aui;
     oapv_frm_info_t *finfo = NULL;
 
-    AVPacket* pkt_fd; // encoded frame data
-
     if (av_container_fifo_can_read(apvctx->output_fifo))
         goto do_output;
 
@@ -528,11 +526,9 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     memset(&ofrms, 0, sizeof(oapv_frms_t));
     memset(&aui, 0, sizeof(oapv_au_info_t));
 
-    pkt_fd = av_packet_clone(pkt);
-    av_packet_unref(pkt);
 
-    bs_buf = pkt_fd->data;
-    bs_buf_size = pkt_fd->size;
+    bs_buf = pkt->data;
+    bs_buf_size = pkt->size;
 
     if (OAPV_FAILED(oapvd_info(bs_buf, bs_buf_size, &aui)))
     {
@@ -702,7 +698,7 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             }
 
             /* Use ff_decode_frame_props_from_pkt() to fill frame properties */
-            ret = ff_decode_frame_props_from_pkt(avctx, apvctx->frames[j], pkt_fd);
+            ret = ff_decode_frame_props_from_pkt(avctx, apvctx->frames[j], pkt);
             if (ret < 0) {
                 av_log(avctx, AV_LOG_ERROR, "ff_decode_frame_props_from_pkt error\n");
                 av_frame_unref(apvctx->frames[j]);
@@ -719,7 +715,7 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 goto end;
             }
 
-            if (pkt_fd->flags & AV_PKT_FLAG_KEY) {
+            if (pkt->flags & AV_PKT_FLAG_KEY) {
                 apvctx->frames[j]->pict_type = AV_PICTURE_TYPE_I;
                 apvctx->frames[j]->flags |= AV_FRAME_FLAG_KEY;
             }
@@ -733,7 +729,7 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     }
 
 end:
-    av_packet_unref(pkt_fd);
+    av_packet_unref(pkt);
 
     for(int i = 0; i < ofrms.num_frms; i++) {
         if(ofrms.frm[i].imgb != NULL) {
