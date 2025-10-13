@@ -33,8 +33,6 @@
 #include "decode.h"
 #include "cbs_apv.h"
 
-#define OAPV_IMG_CLIP_VAL(n, min, max) (((n) > (max)) ? (max) : (((n) < (min)) ? (min) : (n)))
-
 /**
  * The structure stores all the states associated with the instance of Open APV decoder
  */
@@ -82,43 +80,6 @@ static int apv_imgb_addref(oapv_imgb_t * imgb)
 static int apv_imgb_getref(oapv_imgb_t * imgb)
 {
     return imgb->refcnt;
-}
-
-static void apv_imgb_cpy_plane(oapv_imgb_t *dst, oapv_imgb_t *src)
-{
-    int i, j;
-    unsigned char *s, *d;
-    int numbyte = OAPV_CS_GET_BYTE_DEPTH(src->cs);
-
-    for(i = 0; i < src->np; i++) {
-        s = (unsigned char *)src->a[i];
-        d = (unsigned char *)dst->a[i];
-
-        for(j = 0; j < src->ah[i]; j++) {
-            memcpy(d, s, numbyte * src->aw[i]);
-            s += src->s[i];
-            d += dst->s[i];
-        }
-    }
-}
-
-static void apv_imgb_cpy(oapv_imgb_t *dst, oapv_imgb_t *src, AVCodecContext *avctx)
-{
-    int i;
-    
-    if(src->cs == dst->cs) {
-        apv_imgb_cpy_plane(dst, src);
-    } else {
-        av_log(avctx, AV_LOG_ERROR, "ERROR: unsupported image copy\n");
-        return;
-    }
-    for(i = 0; i < OAPV_MAX_CC; i++) {
-        dst->x[i] = src->x[i];
-        dst->y[i] = src->y[i];
-        dst->w[i] = src->w[i];
-        dst->h[i] = src->h[i];
-        dst->ts[i] = src->ts[i];
-    }
 }
 
 /**
@@ -496,8 +457,6 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     oapvd_stat_t stat;
     oapv_bitb_t bitb;
     oapv_frms_t ofrms;
-    oapv_imgb_t *imgb_w = NULL;
-    oapv_imgb_t *imgb_o = NULL;
     oapv_frm_t  *frm = NULL;
 
     oapv_au_info_t aui;
@@ -653,27 +612,6 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 "Stream contains additional non-primary frames "
                 "which will be ignored by the decoder.\n");
         } else {
-            // if the bit depth of the encoded frame is different than the requested bit depth of the output stream frames,
-            // set by the output_depth option
-            if(OAPV_CS_GET_BIT_DEPTH(frm->imgb->cs) != apvctx->output_depth) {
-                if(imgb_w == NULL) {
-                    imgb_w = apv_imgb_create(frm->imgb->w[0], frm->imgb->h[0],
-                                            OAPV_CS_SET(OAPV_CS_GET_FORMAT(frm->imgb->cs), apvctx->output_depth, 0), avctx);
-                    if(imgb_w == NULL) {
-                        av_log(avctx, AV_LOG_ERROR,"cannot allocate image buffer (w:%d, h:%d, cs:%d)\n",
-                                frm->imgb->w[0], frm->imgb->h[0], frm->imgb->cs);
-
-                        ret = AVERROR_INVALIDDATA;
-                        goto end;
-                    }
-                }
-                apv_imgb_cpy(imgb_w, frm->imgb, avctx);
-
-                imgb_o = imgb_w;
-            }
-            else {
-                imgb_o = frm->imgb;
-            }
 
             if(apvctx->frames[j] == NULL) {
                 apvctx->frames[j] = av_frame_alloc();
@@ -689,7 +627,7 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             }
 
             /* Move decoded frame data form oapv_imgb_t into AVFrame object */
-            ret = set_frame_data(avctx, apvctx->frames[j], imgb_o);
+            ret = set_frame_data(avctx, apvctx->frames[j], frm->imgb);
             if(ret < 0) {
                 av_log(avctx, AV_LOG_ERROR, "Frame data moving error\n");
                 av_frame_unref(apvctx->frames[j]);
@@ -737,12 +675,6 @@ end:
             ofrms.frm[i].imgb = NULL;
         }
     }
-    if (imgb_w) {
-        imgb_w->release(imgb_w);
-        imgb_w = NULL;
-    }
-
-    imgb_o = NULL;
 
     if (av_container_fifo_can_read(apvctx->output_fifo))
         goto do_output;
@@ -790,20 +722,11 @@ static av_cold int liboapvd_close(AVCodecContext *avctx)
     return 0;
 }
 
-#define OFFSET(x) offsetof(ApvDecContext, x)
-#define VD AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
-
-static const AVOption liboapvd_options[] = {
-    { "output_depth", "Output depth", OFFSET(output_depth), AV_OPT_TYPE_INT, { .i64 = 10 }, 10,  12, VD, .unit = "output_depth" },
-    { "10", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 10 }, INT_MIN, INT_MAX, VD, .unit = "output_depth" },
-    { "12", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 12 }, INT_MIN, INT_MAX, VD, .unit = "output_depth" },
-    { NULL }
-};
 
 static const AVClass liboapvd_class = {
     .class_name = "liboapv",
     .item_name  = av_default_item_name,
-    .option     = liboapvd_options,
+    .option     = NULL,
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
