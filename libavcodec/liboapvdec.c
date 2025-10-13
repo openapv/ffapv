@@ -44,8 +44,6 @@ typedef struct ApvDecContext {
 
     oapvm_t mid;            // OAPV metadata container
 
-    int output_depth;
-
     struct AVContainerFifo *output_fifo;
 
     AVFrame* frames[OAPV_MAX_NUM_FRAMES];
@@ -510,10 +508,6 @@ static int liboapvd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             ret = AVERROR_INVALIDDATA;
             goto end;
         }
-    }
-
-    if(apvctx->output_depth == 0) {
-        apvctx->output_depth = OAPV_CS_GET_BIT_DEPTH(finfo->cs);
     }
 
     /* main decoding block */
