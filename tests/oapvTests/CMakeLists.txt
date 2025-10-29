@@ -5,6 +5,9 @@ project(ffapvTests)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set runtime output directory
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # Update periodically release url to latest version
 include(FetchContent)
 FetchContent_Declare(
@@ -25,6 +28,13 @@ target_link_libraries(
   oapv_tests
   GTest::gtest_main
 )
+
+# Enable compiler warnings for better code quality
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(oapv_tests PRIVATE -Wall -Wextra -Wpedantic)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(oapv_tests PRIVATE /W4)
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(oapv_tests)

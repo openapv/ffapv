@@ -3,6 +3,14 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <cstdio>
+#include <filesystem>
+#include <regex>
+
+// Performance thresholds in milliseconds
+constexpr long long ENCODING_TIME_THRESHOLD_MS = 5000;
+constexpr long long DECODING_TIME_THRESHOLD_MS = 5000;
+constexpr long long OAPV_DECODING_TIME_THRESHOLD_MS = 5000;
 
 struct FFmpegParams {
     std::string codec;
@@ -17,14 +25,25 @@ protected:
     std::string decodedFile = "test_decoded.yuv";
 
     void SetUp() override {
+        // Validate resolution format
+        std::regex resolution_pattern(R"(^\d+x\d+$)");
+        ASSERT_TRUE(std::regex_match(GetParam().resolution, resolution_pattern)) 
+            << "Invalid resolution format: " << GetParam().resolution;
+        
+        // Check if ffmpeg is available
+        int ffmpeg_check = std::system("ffmpeg -version > /dev/null 2>&1");
+        ASSERT_EQ(ffmpeg_check, 0) << "ffmpeg is not available in PATH";
+        
         // Generate test video source
         std::string genCmd =
             "ffmpeg -y -f lavfi -i testsrc=size=" + GetParam().resolution +
             ":rate=25 -t 2 -pix_fmt yuv422p10le " + inputFile + " > /dev/null 2>&1";
-        std::system(genCmd.c_str());
+        int ret = std::system(genCmd.c_str());
+        ASSERT_EQ(ret, 0) << "Failed to generate test input file: " << genCmd;
     }
 
     void TearDown() override {
+        // Clean up temporary files
         std::remove(encodedFile.c_str());
         std::remove(decodedFile.c_str());
         std::remove(inputFile.c_str());
@@ -46,7 +65,7 @@ TEST_P(FFmpegCmdPerfTest, EncodeDecode) {
     std::string encodeCmd =
         "ffmpeg -y -f rawvideo -pix_fmt yuv422p10le -s:v " + p.resolution +
         " -i " + inputFile +
-        " -c:v " + p.codec + " " +encodedFile +
+        " -c:v " + p.codec + " " + encodedFile +
         " > /dev/null 2>&1";
 
     long long encTime = RunCommandAndMeasure(encodeCmd);
@@ -65,24 +84,24 @@ TEST_P(FFmpegCmdPerfTest, EncodeDecode) {
     std::cout << "[" << p.name << "] Decoding took " << decTime << " ms\n";
 
     // Record decode timing into gtest XML
-    RecordProperty("decode_time_ms", decTime);
+    RecordProperty("Native_decode_time_ms", decTime);
 
     // Decode oapv
     std::string decodeOapvCmd =
-        "ffmpeg -y -i " + encodedFile +
+        "ffmpeg -y -c:v liboapv -i " + encodedFile +
         " -f rawvideo -pix_fmt yuv422p10le " + decodedFile +
         " > /dev/null 2>&1";
 
     long long decOapvTime = RunCommandAndMeasure(decodeOapvCmd);
-    std::cout << "[" << p.name << "] Decoding took " << decOapvTime << " ms\n";
+    std::cout << "[" << p.name << "] OAPV decoding took " << decOapvTime << " ms\n";
 
     // Record decode timing into gtest XML
-    RecordProperty("decode_time_ms", decOapvTime);
+    RecordProperty("OAPV_decode_time_ms", decOapvTime);
 
     // Optional thresholds
-    EXPECT_LT(encTime, 5000);
-    EXPECT_LT(decTime, 5000);
-    EXPECT_LT(decOapvTime, 5000);
+    EXPECT_LT(encTime, ENCODING_TIME_THRESHOLD_MS);
+    EXPECT_LT(decTime, DECODING_TIME_THRESHOLD_MS);
+    EXPECT_LT(decOapvTime, OAPV_DECODING_TIME_THRESHOLD_MS);
 }
 
 // Add here more tests combinations!
