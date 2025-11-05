@@ -331,12 +331,44 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     cdsc->max_num_frms = MAX_NUM_FRMS;
 
     const AVDictionaryEntry *en = NULL;
+    char* family = NULL;
     while (en = av_dict_iterate(apv->oapv_params, en)) {
-        ret = oapve_param_parse(&cdsc->param[FRM_IDX], en->key, en->value);
-        if (ret < 0)
-            av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
+        if (strcmp(en->key, "family") == 0) family = en->value;
+        else{
+            ret = oapve_param_parse(&cdsc->param[FRM_IDX], en->key, en->value);
+            if (ret < 0)
+                av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
+        }
     }
 
+    // family to bitrate conversion and setting the bitrate param
+    char bitrate[32];
+    if (family && strlen(family) > 0){
+        ret = check_family_conf(avctx, apv, family);
+        if(ret < 0){
+            av_log(avctx, AV_LOG_WARNING, "Wrong configuration for family\n");
+        }
+        else if (cdsc->param[FRM_IDX].bitrate > 0){
+            av_log(avctx, AV_LOG_WARNING, "Bitrate and family cannot be set simultaneously.\n");
+            ret = -1;
+        }
+        else{
+            int kbps = family_to_bitrate(family, &cdsc->param[FRM_IDX]);
+            if(kbps < 0) {
+                av_log(avctx, AV_LOG_WARNING, "Failed to get the target bitrate from family.\n");
+                ret = -1;
+            }
+            else{
+                sprintf(bitrate, "%d", kbps);
+                ret = oapve_param_parse(&cdsc->param[FRM_IDX], "bitrate", bitrate);
+                if (ret < 0){
+                    av_log(avctx, AV_LOG_WARNING, "input value (%s) of %s is invalid\n", "bitrate", bitrate);
+                }
+            }
+        }
+        if (ret < 0)
+            av_log(avctx, AV_LOG_WARNING, "Error parsing option 'family = %s'.\n", family);
+    }
     return 0;
 }
 
