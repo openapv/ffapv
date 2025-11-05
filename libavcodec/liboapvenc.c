@@ -78,6 +78,58 @@ typedef struct ApvEncContext {
     AVDictionary *oapv_params;
 } ApvEncContext;
 
+static int get_val_from_key(const oapv_dict_str_int_t * dict, const char * key)
+{
+    while(strlen(dict->key) > 0) {
+        if(strcmp(dict->key, key) == 0){
+            return dict->val;
+        }
+        dict++;
+    }
+    return -1;
+}
+static int check_family_conf(AVCodecContext* avctx, ApvEncContext* apv, char* family){
+    int f = get_val_from_key(opts_family, family);
+    if(f < 0) {
+        av_log(avctx, AV_LOG_WARNING, "Invalid family (%s)\n", family);
+        return -1;
+    }
+
+    int p = apv->cdsc.param[FRM_IDX].profile_idc; // profile idc information 
+
+    switch(f) {
+    case OAPV_FAMILY_422_LQ:
+    case OAPV_FAMILY_422_SQ:
+    case OAPV_FAMILY_422_HQ:
+        if(p != OAPV_PROFILE_422_10) {
+            av_log(avctx, AV_LOG_WARNING, "Family (%s) and profile idc (%d) are unmatched\n", family, p);
+            return -1;
+        }
+        break;
+    case OAPV_FAMILY_444_UQ:
+        if(p != OAPV_PROFILE_444_10) {
+            av_log(avctx, AV_LOG_WARNING, "Family (%s) and profile idc (%d) are unmatched\n", family, p);
+            return -1;
+        }
+        break;
+    default:
+        av_log(avctx, AV_LOG_WARNING, "Invalid family (%s)\n", family);
+        return -1;
+    }
+    return 0;
+}
+
+static int family_to_bitrate(char * family, oapve_param_t *param)
+{
+    int ret, kbps;
+    int fn = get_val_from_key(opts_family, family);
+    ret = oapve_family_bitrate(fn, param->w, param->h, param->fps_num, param->fps_den, &kbps);
+    if(OAPV_FAILED(ret)) {
+        return -1;
+    }
+    return kbps;
+}
+
 static int apv_imgb_release(oapv_imgb_t *imgb)
 {
     int refcnt = --imgb->refcnt;
