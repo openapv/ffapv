@@ -349,7 +349,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             av_log(avctx, AV_LOG_WARNING, "Wrong configuration for family\n");
         }
         else if (cdsc->param[FRM_IDX].bitrate > 0){
-            av_log(avctx, AV_LOG_WARNING, "Bitrate and family cannot be set simultaneously.\n");
+            av_log(avctx, AV_LOG_WARNING, "Bitrate and family cannot be set simultaneously, hence setting only bitrate from oapve-params.\n");
             ret = -1;
         }
         else{
