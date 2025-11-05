@@ -46,6 +46,15 @@
 #define FRM_IDX      (0)           // supports only 1-frame in an access unit
 #define MAX_NUM_CC   (OAPV_MAX_CC) // Max number of color components (upto 4:4:4:4)
 
+// dictionary for family name to family codes
+static const oapv_dict_str_int_t opts_family[] = {
+    {"422-LQ",    OAPV_FAMILY_422_LQ},
+    {"422-SQ",    OAPV_FAMILY_422_SQ},
+    {"422-HQ",    OAPV_FAMILY_422_HQ},
+    {"444-UQ",    OAPV_FAMILY_444_UQ},
+    {"", 0} // termination
+};
+
 /**
  * The structure stores all the states associated with the instance of APV encoder
  */
