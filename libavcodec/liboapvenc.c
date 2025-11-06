@@ -72,6 +72,12 @@ typedef struct ApvEncContext {
     int num_frames;         // number of frames in an access unit
 
     int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
+    
+    int family_id;          // apv family:
+                            // 1. High quality mezzanine                    APV 422 HQ 4:2:2
+                            // 2. Standard quality mezzanine                APV 422 SQ 4:2:2
+                            // 3. Editing-friendly low-data-rate workflows  APV 422 LQ 4:2:2
+                            // 4. Finishing                                 APV 444 UQ 4:4:4
 
     int qp;                 // quantization parameter (QP) [0,63]
 
@@ -567,7 +573,13 @@ static const AVOption liboapv_options[] = {
     { "slow",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_SLOW },    INT_MIN, INT_MAX, VE, .unit = "preset" },
     { "placebo", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_PLACEBO }, INT_MIN, INT_MAX, VE, .unit = "preset" },
     { "default", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_DEFAULT }, INT_MIN, INT_MAX, VE, .unit = "preset" },
-
+    
+    { "family", "APV Family", OFFSET(family_id), AV_OPT_TYPE_INT, { .i64 = OAPV_FAMILY_422_SQ }, OAPV_FAMILY_422_LQ, OAPV_FAMILY_444_UQ, VE, .unit = "family" },
+    { "422_LQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_LQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
+    { "422_SQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_SQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
+    { "422_HQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_HQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
+    { "444_UQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_444_UQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
+    
     { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 63, VE },
     { "oapv-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(oapv_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE },
     { NULL }
