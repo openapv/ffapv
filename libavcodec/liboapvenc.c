@@ -76,10 +76,6 @@ typedef struct ApvEncContext {
 } ApvEncContext;
 
 static int check_family_conf(AVCodecContext* avctx, ApvEncContext* apv){
-    if(apv->family_id < 0) {
-        av_log(avctx, AV_LOG_WARNING, "Invalid family idc (%d)\n", apv->family_id);
-        return -1;
-    }
 
     int p = apv->cdsc.param[FRM_IDX].profile_idc; // profile idc information 
 
@@ -89,33 +85,19 @@ static int check_family_conf(AVCodecContext* avctx, ApvEncContext* apv){
     case OAPV_FAMILY_422_HQ:
         if(p != OAPV_PROFILE_422_10) {
             av_log(avctx, AV_LOG_WARNING, "Family idc (%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
-            return -1;
+            return AVERROR_INVALIDDATA;
         }
         break;
     case OAPV_FAMILY_444_UQ:
         if(p != OAPV_PROFILE_444_10) {
             av_log(avctx, AV_LOG_WARNING, "Family idc(%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
-            return -1;
+            return AVERROR_INVALIDDATA;
         }
         break;
     default:
-        av_log(avctx, AV_LOG_WARNING, "Invalid family idc (%d)\n", apv->family_id);
-        return -1;
+        return AVERROR_INVALIDDATA; // invalid family
     }
     return 0;
-}
-
-static int family_to_bitrate(AVCodecContext* avctx, ApvEncContext* apv)
-{
-    int ret = 0, kbps;
-    oapve_param_t* param = &(apv->cdsc.param[FRM_IDX]);
-    ret = check_family_conf(avctx, apv);
-    if (ret < 0) return ret;
-    ret = oapve_family_bitrate(apv->family_id, param->w, param->h, param->fps_num, param->fps_den, &kbps);
-    if(OAPV_FAILED(ret)) {
-        return -1;
-    }
-    return kbps;
 }
 
 static int apv_imgb_release(oapv_imgb_t *imgb)
@@ -319,22 +301,21 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     cdsc->max_num_frms = MAX_NUM_FRMS;
 
     // family to bitrate conversion 
-    char char_family_bitrate[32];
-    int family_bitrate = family_to_bitrate(avctx, apv);
-    if (family_bitrate < 0){
-        av_log(avctx, AV_LOG_WARNING, "Unable to get the bitrate from family, hence ignoring family option\n");
-    }
-    else{
-        sprintf(char_family_bitrate, "%d", family_bitrate);
-        ret = oapve_param_parse(&cdsc->param[FRM_IDX], "bitrate", char_family_bitrate);
-        if (ret < 0)
-            av_log(avctx, AV_LOG_WARNING, "Unable to parse family bitrate, hence ignoring family option\n");
+    ret = check_family_conf(avctx, apv);
+    if(!ret) {
+        int kbps = 0;
+
+        ret = oapve_family_bitrate(apv->family_id, cdsc->param[FRM_IDX].w, cdsc->param[FRM_IDX].h, cdsc->param[FRM_IDX].fps_num, cdsc->param[FRM_IDX].fps_den, &kbps);
+        if(OAPV_FAILED(ret)) {
+            return AVERROR_EXTERNAL;
+        }
+        cdsc->param[FRM_IDX].bitrate = kbps;
     }
 
     const AVDictionaryEntry *en = NULL;
     while (en = av_dict_iterate(apv->oapv_params, en)) {
         ret = oapve_param_parse(&cdsc->param[FRM_IDX], en->key, en->value);
-        if (ret < 0)
+        if (OAPV_FAILED(ret))
             av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
     }
 
@@ -537,7 +518,7 @@ static const AVOption liboapv_options[] = {
     { "placebo", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_PLACEBO }, INT_MIN, INT_MAX, VE, .unit = "preset" },
     { "default", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_DEFAULT }, INT_MIN, INT_MAX, VE, .unit = "preset" },
     
-    { "family", "APV Family", OFFSET(family_id), AV_OPT_TYPE_INT, { .i64 = OAPV_FAMILY_422_SQ }, OAPV_FAMILY_422_LQ, OAPV_FAMILY_444_UQ, VE, .unit = "family" },
+    { "family", "APV Family", OFFSET(family_id), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, OAPV_FAMILY_444_UQ, VE, .unit = "family" },
     { "422_LQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_LQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
     { "422_SQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_SQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
     { "422_HQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_HQ },  INT_MIN, INT_MAX, VE, .unit = "family" },
