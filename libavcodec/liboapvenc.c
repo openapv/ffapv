@@ -300,6 +300,13 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     cdsc->max_bs_buf_size = MAX_BS_BUF; /* maximum bitstream buffer size */
     cdsc->max_num_frms = MAX_NUM_FRMS;
 
+    const AVDictionaryEntry *en = NULL;
+    while (en = av_dict_iterate(apv->oapv_params, en)) {
+        ret = oapve_param_parse(&cdsc->param[FRM_IDX], en->key, en->value);
+        if (OAPV_FAILED(ret))
+            av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
+    }
+
     // family to bitrate conversion 
     if(apv->family_id) {
 
@@ -314,13 +321,6 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
             return AVERROR_EXTERNAL;
         }
         cdsc->param[FRM_IDX].bitrate = kbps;
-    }
-
-    const AVDictionaryEntry *en = NULL;
-    while (en = av_dict_iterate(apv->oapv_params, en)) {
-        ret = oapve_param_parse(&cdsc->param[FRM_IDX], en->key, en->value);
-        if (OAPV_FAILED(ret))
-            av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
     }
 
     return 0;
