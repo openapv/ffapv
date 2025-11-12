@@ -95,7 +95,7 @@ static int check_family_conf(AVCodecContext* avctx, ApvEncContext* apv){
         }
         break;
     default:
-        return AVERROR_INVALIDDATA; // invalid family
+        return AVERROR_INVALIDDATA; // invalid/unknown family
     }
     return 0;
 }
@@ -301,10 +301,14 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     cdsc->max_num_frms = MAX_NUM_FRMS;
 
     // family to bitrate conversion 
-    ret = check_family_conf(avctx, apv);
-    if(!ret) {
-        int kbps = 0;
+    if(apv->family_id) {
 
+        ret = check_family_conf(avctx, apv);
+        if(ret == AVERROR_INVALIDDATA) {
+            return AVERROR_EXTERNAL;
+        }
+
+        int kbps = 0;
         ret = oapve_family_bitrate(apv->family_id, cdsc->param[FRM_IDX].w, cdsc->param[FRM_IDX].h, cdsc->param[FRM_IDX].fps_num, cdsc->param[FRM_IDX].fps_den, &kbps);
         if(OAPV_FAILED(ret)) {
             return AVERROR_EXTERNAL;
