@@ -792,7 +792,6 @@ extern const FFCodec ff_liblc3_decoder;
 extern const FFCodec ff_libmp3lame_encoder;
 extern const FFCodec ff_libmpeghdec_decoder;
 extern const FFCodec ff_liboapv_encoder;
-extern const FFCodec ff_liboapv_decoder;
 extern const FFCodec ff_libopencore_amrnb_encoder;
 extern const FFCodec ff_libopencore_amrnb_decoder;
 extern const FFCodec ff_libopencore_amrwb_decoder;

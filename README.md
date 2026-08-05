@@ -6,13 +6,7 @@ This project contains FFmpeg project implementation with added support for APV c
 https://github.com/AcademySoftwareFoundation/openapv
 
 Pure FFmpeg currently have OpenAPV encoder and native APV decoder only.
-This project have also added support for **OpenAPV decoding**. 
-
-Oapv decoder can be used by specify `-c:v liboapv` before input file.
-
-```
-ffmpeg -c:v liboapv -i inputfile.yuv -pix_fmt yuv422p10le -f rawvideo out.yuv
-```
+This project additionally provides **APV family/profile selection** for the OpenAPV encoder (`-family` option: 422_LQ, 422_SQ, 422_HQ, 444_UQ).
 
 Rest functionallities are the same as in pure ffmpeg.  
 
