@@ -33,37 +33,22 @@ static int cbs_apv_get_num_comp(const APVRawFrameHeader *fh)
     case APV_CHROMA_FORMAT_4444:
         return 4;
     default:
-        av_assert0(0 && "Invalid chroma_format_idc");
+        av_unreachable("Invalid chroma_format_idc");
     }
 }
 
-static void cbs_apv_derive_tile_info(APVDerivedTileInfo *ti,
+static void cbs_apv_derive_tile_info(CodedBitstreamContext *ctx,
                                      const APVRawFrameHeader *fh)
 {
+    CodedBitstreamAPVContext *priv = ctx->priv_data;
     int frame_width_in_mbs   = (fh->frame_info.frame_width  + 15) / 16;
     int frame_height_in_mbs  = (fh->frame_info.frame_height + 15) / 16;
-    int start_mb, i;
+    int tile_cols = (frame_width_in_mbs  + fh->tile_info.tile_width_in_mbs - 1)  / fh->tile_info.tile_width_in_mbs;
+    int tile_rows = (frame_height_in_mbs + fh->tile_info.tile_height_in_mbs - 1) / fh->tile_info.tile_height_in_mbs;
 
-    start_mb = 0;
-    for (i = 0; start_mb < frame_width_in_mbs; i++) {
-        ti->col_starts[i] = start_mb * APV_MB_WIDTH;
-        start_mb += fh->tile_info.tile_width_in_mbs;
-    }
-    av_assert0(i <= APV_MAX_TILE_COLS);
-    ti->col_starts[i] = frame_width_in_mbs * APV_MB_WIDTH;
-    ti->tile_cols = i;
+    av_assert0(tile_cols <= APV_MAX_TILE_COLS && tile_rows <= APV_MAX_TILE_ROWS);
 
-    start_mb = 0;
-    for (i = 0; start_mb < frame_height_in_mbs; i++) {
-        av_assert0(i < APV_MAX_TILE_ROWS);
-        ti->row_starts[i] = start_mb * APV_MB_HEIGHT;
-        start_mb += fh->tile_info.tile_height_in_mbs;
-    }
-    av_assert0(i <= APV_MAX_TILE_ROWS);
-    ti->row_starts[i] = frame_height_in_mbs * APV_MB_HEIGHT;
-    ti->tile_rows = i;
-
-    ti->num_tiles = ti->tile_cols * ti->tile_rows;
+    priv->num_tiles = tile_cols * tile_rows;
 }
 
 
@@ -82,8 +67,6 @@ static void cbs_apv_derive_tile_info(APVDerivedTileInfo *ti,
 
 #define u(width, name, range_min, range_max) \
     xu(width, name, current->name, range_min, range_max, 0, )
-#define ub(width, name) \
-    xu(width, name, current->name, 0, MAX_UINT_BITS(width), 0, )
 #define us(width, name, range_min, range_max, subs, ...) \
     xu(width, name, current->name, range_min, range_max,  subs, __VA_ARGS__)
 #define ubs(width, name, subs, ...) \
@@ -101,6 +84,12 @@ static void cbs_apv_derive_tile_info(APVDerivedTileInfo *ti,
 #define RWContext GetBitContext
 #define FUNC(name) cbs_apv_read_ ## name
 
+#define ub(width, name) do { \
+        uint32_t value; \
+        CHECK(CBS_FUNC(read_simple_unsigned)(ctx, rw, width, #name, \
+                                             &value)); \
+        current->name = value; \
+    } while (0)
 #define xu(width, name, var, range_min, range_max, subs, ...) do { \
         uint32_t value; \
         CHECK(CBS_FUNC(read_unsigned)(ctx, rw, width, #name, \
@@ -121,6 +110,7 @@ static void cbs_apv_derive_tile_info(APVDerivedTileInfo *ti,
 #undef READWRITE
 #undef RWContext
 #undef FUNC
+#undef ub
 #undef xu
 #undef infer
 #undef byte_alignment
@@ -132,6 +122,11 @@ static void cbs_apv_derive_tile_info(APVDerivedTileInfo *ti,
 #define RWContext PutBitContext
 #define FUNC(name) cbs_apv_write_ ## name
 
+#define ub(width, name) do { \
+        uint32_t value = current->name; \
+        CHECK(CBS_FUNC(write_simple_unsigned)(ctx, rw, width, #name, \
+                                              value)); \
+    } while (0)
 #define xu(width, name, var, range_min, range_max, subs, ...) do { \
         uint32_t value = var; \
         CHECK(CBS_FUNC(write_unsigned)(ctx, rw, width, #name, \
@@ -157,6 +152,7 @@ static void cbs_apv_derive_tile_info(APVDerivedTileInfo *ti,
 #undef READWRITE
 #undef RWContext
 #undef FUNC
+#undef ub
 #undef xu
 #undef infer
 #undef byte_alignment
@@ -205,7 +201,7 @@ static int cbs_apv_split_fragment(CodedBitstreamContext *ctx,
 
         if (size < 8) {
             av_log(ctx->log_ctx, AV_LOG_ERROR, "Invalid PBU: "
-                   "fragment too short (%"SIZE_SPECIFIER" bytes).\n",
+                   "fragment too short (%zu bytes).\n",
                    size);
             err = AVERROR_INVALIDDATA;
             goto fail;
@@ -436,7 +432,7 @@ static void cbs_apv_free_metadata(AVRefStructOpaque unused, void *content)
     }
 }
 
-static const CodedBitstreamUnitTypeDescriptor cbs_apv_unit_types[] = {
+static CodedBitstreamUnitTypeDescriptor cbs_apv_unit_types[] = {
     {
         .nb_unit_types   = CBS_UNIT_TYPE_RANGE,
         .unit_type.range = {

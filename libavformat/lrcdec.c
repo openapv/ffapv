@@ -78,7 +78,7 @@ static int64_t count_ts(const char *p)
 static int64_t read_ts(const char *p, int64_t *start)
 {
     int64_t offset = 0;
-    uint64_t mm;
+    uint32_t mm;
     double ss;
     char prefix[3];
 
@@ -88,11 +88,11 @@ static int64_t read_ts(const char *p, int64_t *start)
     if(p[offset] != '[') {
         return 0;
     }
-    int ret = sscanf(p, "%2[[-]%"SCNu64":%lf]", prefix, &mm, &ss);
-    if (ret != 3 || prefix[0] != '[') {
+    int ret = av_sscanf(p, "%2[[-]%"SCNu32":%lf]", prefix, &mm, &ss);
+    if (ret != 3 || prefix[0] != '[' || ss < 0 || ss > 60 || !isfinite(ss)) {
         return 0;
     }
-    *start = (mm * 60 + ss) * AV_TIME_BASE;
+    *start = llrint((mm * 60 + ss) * AV_TIME_BASE);
     if (prefix[1] == '-') {
         *start = - *start;
     }

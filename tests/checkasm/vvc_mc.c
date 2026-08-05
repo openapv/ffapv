@@ -72,7 +72,7 @@ static const int sizes[] = { 2, 4, 8, 16, 32, 64, 128 };
         randomize_buffers(buf0, buf1, size, mask);          \
     } while (0)
 
-static void check_put_vvc_luma(void)
+static av_noinline void check_put_vvc_luma(void)
 {
     LOCAL_ALIGNED_32(int16_t, dst0, [DST_BUF_SIZE / 2]);
     LOCAL_ALIGNED_32(int16_t, dst1, [DST_BUF_SIZE / 2]);
@@ -120,7 +120,7 @@ static void check_put_vvc_luma(void)
     report("put_luma");
 }
 
-static void check_put_vvc_luma_uni(void)
+static av_noinline void check_put_vvc_luma_uni(void)
 {
     LOCAL_ALIGNED_32(uint8_t, dst0, [DST_BUF_SIZE]);
     LOCAL_ALIGNED_32(uint8_t, dst1, [DST_BUF_SIZE]);
@@ -171,7 +171,7 @@ static void check_put_vvc_luma_uni(void)
     report("put_uni_luma");
 }
 
-static void check_put_vvc_chroma(void)
+static av_noinline void check_put_vvc_chroma(void)
 {
     LOCAL_ALIGNED_32(int16_t, dst0, [DST_BUF_SIZE / 2]);
     LOCAL_ALIGNED_32(int16_t, dst1, [DST_BUF_SIZE / 2]);
@@ -219,7 +219,7 @@ static void check_put_vvc_chroma(void)
     report("put_chroma");
 }
 
-static void check_put_vvc_chroma_uni(void)
+static av_noinline void check_put_vvc_chroma_uni(void)
 {
     LOCAL_ALIGNED_32(uint8_t, dst0, [DST_BUF_SIZE]);
     LOCAL_ALIGNED_32(uint8_t, dst1, [DST_BUF_SIZE]);
@@ -273,7 +273,7 @@ static void check_put_vvc_chroma_uni(void)
 #define AVG_SRC_BUF_SIZE (MAX_CTU_SIZE * MAX_CTU_SIZE)
 #define AVG_DST_BUF_SIZE (MAX_PB_SIZE * MAX_PB_SIZE * 2)
 
-static void check_avg(void)
+static av_noinline void check_avg(void)
 {
     LOCAL_ALIGNED_32(int16_t, src00, [AVG_SRC_BUF_SIZE]);
     LOCAL_ALIGNED_32(int16_t, src01, [AVG_SRC_BUF_SIZE]);
@@ -306,7 +306,7 @@ static void check_avg(void)
                 {
                     declare_func(void, uint8_t *dst, ptrdiff_t dst_stride,
                         const int16_t *src0, const int16_t *src1, int width, int height,
-                        int denom, int w0, int w1, int o0, int o1);
+                        int denom, int w0, int w1, int o);
                     {
                         const int denom = rnd() % 8;
                         const int w0    = rnd() % 256 - 128;
@@ -317,12 +317,12 @@ static void check_avg(void)
                             memset(dst0, 0, AVG_DST_BUF_SIZE);
                             memset(dst1, 0, AVG_DST_BUF_SIZE);
 
-                            call_ref(dst0, MAX_CTU_SIZE * SIZEOF_PIXEL, src00, src01, w, h, denom, w0, w1, o0, o1);
-                            call_new(dst1, MAX_CTU_SIZE * SIZEOF_PIXEL, src10, src11, w, h, denom, w0, w1, o0, o1);
+                            call_ref(dst0, MAX_CTU_SIZE * SIZEOF_PIXEL, src00, src01, w, h, denom, w0, w1, o0 + o1);
+                            call_new(dst1, MAX_CTU_SIZE * SIZEOF_PIXEL, src10, src11, w, h, denom, w0, w1, o0 + o1);
                             if (memcmp(dst0, dst1, DST_BUF_SIZE))
                                 fail();
                             if (w == h)
-                                bench_new(dst0, MAX_CTU_SIZE * SIZEOF_PIXEL, src00, src01, w, h, denom, w0, w1, o0, o1);
+                                bench_new(dst0, MAX_CTU_SIZE * SIZEOF_PIXEL, src00, src01, w, h, denom, w0, w1, o0 + o1);
                         }
                     }
                 }
@@ -333,7 +333,7 @@ static void check_avg(void)
 }
 
 #define SR_RANGE 2
-static void check_dmvr(void)
+static av_noinline void check_dmvr(void)
 {
     LOCAL_ALIGNED_32(uint16_t, dst0, [DST_BUF_SIZE]);
     LOCAL_ALIGNED_32(uint16_t, dst1, [DST_BUF_SIZE]);
@@ -394,7 +394,7 @@ static void check_dmvr(void)
 #define BDOF_SRC_SIZE   (MAX_PB_SIZE* (BDOF_BLOCK_SIZE + 2))
 #define BDOF_SRC_OFFSET (MAX_PB_SIZE + 1)
 #define BDOF_DST_SIZE   (BDOF_BLOCK_SIZE * BDOF_BLOCK_SIZE * 2)
-static void check_bdof(void)
+static av_noinline void check_bdof(void)
 {
     LOCAL_ALIGNED_32(uint8_t, dst0, [BDOF_DST_SIZE]);
     LOCAL_ALIGNED_32(uint8_t, dst1, [BDOF_DST_SIZE]);
@@ -431,7 +431,7 @@ static void check_bdof(void)
     report("apply_bdof");
 }
 
-static void check_vvc_sad(void)
+static av_noinline void check_vvc_sad(void)
 {
     const int bit_depth = 10;
     VVCDSPContext c;

@@ -37,8 +37,6 @@
 
 #include "avcodec.h"
 #include "encode.h"
-#include "internal.h"
-#include "packet_internal.h"
 #include "qsv.h"
 #include "qsv_internal.h"
 #include "qsvenc.h"
@@ -685,6 +683,8 @@ static int check_enc_param(AVCodecContext *avctx, QSVEncContext *q)
             av_log(avctx, AV_LOG_ERROR, "Selected ratecontrol mode is unsupported\n");
         if (UNMATCH(LowPower))
               av_log(avctx, AV_LOG_ERROR, "Low power mode is unsupported\n");
+        if (UNMATCH(CodecLevel))
+            av_log(avctx, AV_LOG_ERROR, "Current codec level is unsupported\n");
         if (UNMATCH(FrameInfo.FrameRateExtN) || UNMATCH(FrameInfo.FrameRateExtD))
               av_log(avctx, AV_LOG_ERROR, "Current frame rate is unsupported\n");
         if (UNMATCH(FrameInfo.PicStruct))
@@ -906,6 +906,7 @@ static int init_video_param(AVCodecContext *avctx, QSVEncContext *q)
         if (q->extbrc) {
             q->extco2.LookAheadDepth = q->look_ahead_depth;
         }
+        av_fallthrough;
 #if QSV_HAVE_VCM
     case MFX_RATECONTROL_VCM:
 #endif
@@ -951,6 +952,7 @@ static int init_video_param(AVCodecContext *avctx, QSVEncContext *q)
         break;
     case MFX_RATECONTROL_LA_ICQ:
         q->extco2.LookAheadDepth = q->look_ahead_depth;
+        av_fallthrough;
     case MFX_RATECONTROL_ICQ:
         q->param.mfx.ICQQuality  = av_clip(avctx->global_quality, 1, 51);
         break;
@@ -2689,7 +2691,7 @@ int ff_qsv_encode(AVCodecContext *avctx, QSVEncContext *q,
         if (avctx->codec_id == AV_CODEC_ID_H264) {
             enc_buf = qpkt.bs->ExtParam;
             enc_info = (mfxExtAVCEncodedFrameInfo *)(*enc_buf);
-            ff_side_data_set_encoder_stats(&qpkt.pkt,
+            ff_encode_add_stats_side_data(&qpkt.pkt,
                 enc_info->QP * FF_QP2LAMBDA, NULL, 0, pict_type);
             av_freep(&enc_info);
             av_freep(&enc_buf);

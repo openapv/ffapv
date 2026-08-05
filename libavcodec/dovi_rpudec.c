@@ -261,12 +261,8 @@ static int parse_ext_v2(DOVIContext *s, GetBitContext *gb, AVDOVIDmData *dm,
         dm->l11.whitepoint = get_bits(gb, 4);
         dm->l11.reference_mode_flag = get_bits1(gb);
         skip_bits(gb, 3); /* reserved */
-        dm->l11.sharpness = get_bits(gb, 2);
-        dm->l11.noise_reduction = get_bits(gb, 2);
-        dm->l11.mpeg_noise_reduction = get_bits(gb, 2);
-        dm->l11.frame_rate_conversion = get_bits(gb, 2);
-        dm->l11.brightness = get_bits(gb, 2);
-        dm->l11.color = get_bits(gb, 2);
+        skip_bits(gb, 8); /* reserved */
+        skip_bits(gb, 8); /* reserved */
         break;
     case 254:
         dm->l254.dm_mode = get_bits(gb, 8);
@@ -586,6 +582,8 @@ int ff_dovi_rpu_parse(DOVIContext *s, const uint8_t *rpu, size_t rpu_size,
 
         mapping->num_x_partitions = get_ue_golomb_long(gb) + 1;
         mapping->num_y_partitions = get_ue_golomb_long(gb) + 1;
+        VALIDATE(mapping->num_x_partitions, 1, 0xFFFF);
+        VALIDATE(mapping->num_y_partitions, 1, 0xFFFF);
         /* End of rpu_data_header(), start of vdr_rpu_data_payload() */
 
         for (int c = 0; c < 3; c++) {

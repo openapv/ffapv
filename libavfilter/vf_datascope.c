@@ -194,8 +194,8 @@ static int filter_color2(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs
     const int W = (outlink->w - xoff) / (C * 10);
     const int H = (outlink->h - yoff) / (PP * 12);
     const char *format[4] = {"%02X\n", "%04X\n", "%03d\n", "%05d\n"};
-    const int slice_start = (W * jobnr) / nb_jobs;
-    const int slice_end = (W * (jobnr+1)) / nb_jobs;
+    const int slice_start = ff_slice_pos(W, jobnr, nb_jobs);
+    const int slice_end = ff_slice_pos(W, jobnr + 1, nb_jobs);
     int x, y, p;
 
     for (y = 0; y < H && (y + s->y < inlink->h); y++) {
@@ -241,8 +241,8 @@ static int filter_color(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
     const int W = (outlink->w - xoff) / (C * 10);
     const int H = (outlink->h - yoff) / (PP * 12);
     const char *format[4] = {"%02X\n", "%04X\n", "%03d\n", "%05d\n"};
-    const int slice_start = (W * jobnr) / nb_jobs;
-    const int slice_end = (W * (jobnr+1)) / nb_jobs;
+    const int slice_start = ff_slice_pos(W, jobnr, nb_jobs);
+    const int slice_end = ff_slice_pos(W, jobnr + 1, nb_jobs);
     int x, y, p;
 
     for (y = 0; y < H && (y + s->y < inlink->h); y++) {
@@ -284,8 +284,8 @@ static int filter_mono(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
     const int W = (outlink->w - xoff) / (C * 10);
     const int H = (outlink->h - yoff) / (PP * 12);
     const char *format[4] = {"%02X\n", "%04X\n", "%03d\n", "%05d\n"};
-    const int slice_start = (W * jobnr) / nb_jobs;
-    const int slice_end = (W * (jobnr+1)) / nb_jobs;
+    const int slice_start = ff_slice_pos(W, jobnr, nb_jobs);
+    const int slice_end = ff_slice_pos(W, jobnr + 1, nb_jobs);
     int x, y, p;
 
     for (y = 0; y < H && (y + s->y < inlink->h); y++) {
@@ -390,7 +390,7 @@ static int config_input(AVFilterLink *inlink)
     int ret;
 
     s->nb_planes = av_pix_fmt_count_planes(inlink->format);
-    ret = ff_draw_init2(&s->draw, inlink->format, inlink->colorspace, inlink->color_range, 0);
+    ret = ff_draw_init_from_link(&s->draw, inlink, 0);
     if (ret < 0) {
         av_log(ctx, AV_LOG_ERROR, "Failed to initialize FFDrawContext\n");
         return ret;

@@ -191,9 +191,8 @@ static int alloc_picture(H264Context *h, H264Picture *pic)
 
     av_assert0(!pic->f->data[0]);
 
-    if (h->sei.common.lcevc.info) {
-        HEVCSEILCEVC *lcevc = &h->sei.common.lcevc;
-        ret = ff_frame_new_side_data_from_buf(h->avctx, pic->f, AV_FRAME_DATA_LCEVC, &lcevc->info);
+    if (h->sei.common.itut_t35.lcevc) {
+        ret = ff_frame_new_side_data_from_buf(h->avctx, pic->f, AV_FRAME_DATA_LCEVC, &h->sei.common.itut_t35.lcevc);
         if (ret < 0)
             return ret;
     }
@@ -316,8 +315,10 @@ static void color_frame(AVFrame *frame, const int c[4])
         int bytes  = is_chroma ? AV_CEIL_RSHIFT(frame->width,  desc->log2_chroma_w) : frame->width;
         int height = is_chroma ? AV_CEIL_RSHIFT(frame->height, desc->log2_chroma_h) : frame->height;
         if (desc->comp[0].depth >= 9) {
-            ((uint16_t*)dst)[0] = c[p];
-            av_memcpy_backptr(dst + 2, 2, bytes - 2);
+            if (bytes >= 1)
+                ((uint16_t*)dst)[0] = c[p];
+            if (bytes >= 2)
+                av_memcpy_backptr(dst + 2, 2, 2 * (bytes - 1));
             dst += frame->linesize[p];
             for (int y = 1; y < height; y++) {
                 memcpy(dst, frame->data[p], 2*bytes);
@@ -1150,7 +1151,7 @@ static int h264_init_ps(H264Context *h, const H264SliceContext *sl, int first_sl
         if (flush_changes)
             ff_h264_flush_change(h);
 
-        if ((ret = get_pixel_format(h, 1)) < 0)
+        if ((ret = get_pixel_format(h, must_reinit || needs_reinit)) < 0)
             return ret;
         h->avctx->pix_fmt = ret;
 
@@ -1949,8 +1950,7 @@ static int h264_slice_init(H264Context *h, H264SliceContext *sl,
 
     if (sl->slice_type_nos == AV_PICTURE_TYPE_B && !sl->direct_spatial_mv_pred)
         ff_h264_direct_dist_scale_factor(h, sl);
-    if (!h->setup_finished)
-        ff_h264_direct_ref_list_init(h, sl);
+    ff_h264_direct_ref_list_init(h, sl);
 
     if (h->avctx->skip_loop_filter >= AVDISCARD_ALL ||
         (h->avctx->skip_loop_filter >= AVDISCARD_NONKEY &&
@@ -1978,6 +1978,12 @@ static int h264_slice_init(H264Context *h, H264SliceContext *sl,
                           h->ps.pps->chroma_qp_index_offset[0],
                           h->ps.pps->chroma_qp_index_offset[1]) +
                    6 * (h->ps.sps->bit_depth_luma - 8);
+
+    // slice_table is uint16_t initialized to 0xFFFF as a sentinel.
+    if (h->current_slice >= 0xFFFE) {
+        av_log(h->avctx, AV_LOG_ERROR, "Too many slices (%d)\n", h->current_slice + 1);
+        return AVERROR_PATCHWELCOME;
+    }
 
     sl->slice_num       = ++h->current_slice;
 
@@ -2639,10 +2645,10 @@ static int decode_slice(struct AVCodecContext *avctx, void *arg)
                 goto finish;
             }
             if (sl->cabac.bytestream > sl->cabac.bytestream_end + 2 )
-                av_log(h->avctx, AV_LOG_DEBUG, "bytestream overread %"PTRDIFF_SPECIFIER"\n", sl->cabac.bytestream_end - sl->cabac.bytestream);
+                av_log(h->avctx, AV_LOG_DEBUG, "bytestream overread %td\n", sl->cabac.bytestream_end - sl->cabac.bytestream);
             if (ret < 0 || sl->cabac.bytestream > sl->cabac.bytestream_end + 4) {
                 av_log(h->avctx, AV_LOG_ERROR,
-                       "error while decoding MB %d %d, bytestream %"PTRDIFF_SPECIFIER"\n",
+                       "error while decoding MB %d %d, bytestream %td\n",
                        sl->mb_x, sl->mb_y,
                        sl->cabac.bytestream_end - sl->cabac.bytestream);
                 er_add_slice(sl, sl->resync_mb_x, sl->resync_mb_y, sl->mb_x,

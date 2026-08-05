@@ -875,6 +875,9 @@ static int vk_hevc_end_frame(AVCodecContext *avctx)
                 vksps_p.vcl_hdr, &vksps_p.ptl, &vksps_p.dpbm,
                 &vksps_p.pal, vksps_p.str, &vksps_p.ltr);
 
+        if (sps->vps->vps_num_hrd_parameters > HEVC_MAX_SUB_LAYERS)
+            return AVERROR_INVALIDDATA;
+
         vkvps_p.sls = vkvps_ps;
         set_vps(sps->vps, &vkvps, &vkvps_p.ptl, &vkvps_p.dpbm,
                 vkvps_p.hdr, vkvps_p.sls);
@@ -921,7 +924,7 @@ static int vk_hevc_end_frame(AVCodecContext *avctx)
         rvp[i] = &rfhp->vp;
     }
 
-    av_log(avctx, AV_LOG_DEBUG, "Decoding frame, %"SIZE_SPECIFIER" bytes, %i slices\n",
+    av_log(avctx, AV_LOG_DEBUG, "Decoding frame, %zu bytes, %i slices\n",
            vp->slices_size, hp->h265_pic_info.sliceSegmentCount);
 
     return ff_vk_decode_frame(avctx, pic->f, vp, rav, rvp);
@@ -949,9 +952,8 @@ const FFHWAccel ff_hevc_vulkan_hwaccel = {
     .init                  = &ff_vk_decode_init,
     .update_thread_context = &ff_vk_update_thread_context,
     .decode_params         = &ff_vk_params_invalidate,
-    .flush                 = &ff_vk_decode_flush,
     .uninit                = &ff_vk_decode_uninit,
     .frame_params          = &ff_vk_frame_params,
     .priv_data_size        = sizeof(FFVulkanDecodeContext),
-    .caps_internal         = HWACCEL_CAP_ASYNC_SAFE | HWACCEL_CAP_THREAD_SAFE,
+    .caps_internal         = HWACCEL_CAP_ASYNC_SAFE,
 };

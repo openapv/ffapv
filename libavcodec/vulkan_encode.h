@@ -57,6 +57,10 @@ typedef struct FFVulkanEncodePicture {
     FFVkExecContext       *exec;
     AVBufferRef           *pkt_buf;
     int                    slices_offset;
+
+    int non_independent_frame;
+    char tail_data[16];
+    size_t tail_size;
 } FFVulkanEncodePicture;
 
 /**
@@ -192,11 +196,14 @@ typedef struct FFVulkanEncodeContext {
     FFVkExecPool enc_pool;
 
     FFHWBaseEncodePicture *slots[32];
+
+    AVBufferRef *prev_buf_ref;
+    size_t prev_buf_size;
 } FFVulkanEncodeContext;
 
 #define VULKAN_ENCODE_COMMON_OPTIONS \
     { "qp", "Use an explicit constant quantizer for the whole stream", OFFSET(common.opts.qp), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 255, FLAGS }, \
-    { "quality", "Set encode quality (trades off against speed, higher is faster)", OFFSET(common.opts.quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, FLAGS }, \
+    { "quality", "Set encode quality (trades off against speed, higher is slower)", OFFSET(common.opts.quality), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, FLAGS }, \
     { "rc_mode", "Select rate control type", OFFSET(common.opts.rc_mode), AV_OPT_TYPE_INT, { .i64 = FF_VK_RC_MODE_AUTO }, 0, FF_VK_RC_MODE_AUTO, FLAGS, "rc_mode" }, \
         { "auto",    "Choose mode automatically based on parameters", 0, AV_OPT_TYPE_CONST, { .i64 = FF_VK_RC_MODE_AUTO }, INT_MIN, INT_MAX, FLAGS, "rc_mode" }, \
         { "driver",  "Driver-specific rate control", 0, AV_OPT_TYPE_CONST, { .i64 = VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DEFAULT_KHR      }, INT_MIN, INT_MAX, FLAGS, "rc_mode" }, \

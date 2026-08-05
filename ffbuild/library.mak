@@ -14,6 +14,15 @@ INSTHEADERS := $(INSTHEADERS) $(HEADERS:%=$(SUBDIR)%)
 all-$(CONFIG_STATIC): $(SUBDIR)$(LIBNAME)  $(SUBDIR)lib$(FULLNAME).pc
 all-$(CONFIG_SHARED): $(SUBDIR)$(SLIBNAME) $(SUBDIR)lib$(FULLNAME).pc
 
+# Make <4.0 does not support the built-in file function;
+# versions that do support it should use it, as it's
+# faster and isn't bound by command line length limits.
+ifeq (4.0,$(firstword $(sort 4.0 $(MAKE_VERSION))))
+HAVE_BUILTIN_FILE := yes
+else
+HAVE_BUILTIN_FILE := no
+endif
+
 LIBOBJS := $(OBJS) $(SHLIBOBJS) $(STLIBOBJS) $(SUBDIR)%.h.o $(TESTOBJS)
 $(LIBOBJS) $(LIBOBJS:.o=.s) $(LIBOBJS:.o=.i):   CPPFLAGS += -DHAVE_AV_CONFIG_H
 
@@ -36,7 +45,11 @@ endif
 $(SUBDIR)$(LIBNAME): $(OBJS) $(STLIBOBJS)
 	$(RM) $@
 ifeq ($(RESPONSE_FILES),yes)
+ifeq ($(HAVE_BUILTIN_FILE),yes)
+	$(file >$@.objs,$^)
+else
 	$(Q)echo $^ > $@.objs
+endif
 	$(AR) $(ARFLAGS) $(AR_O) @$@.objs
 else
 	$(AR) $(ARFLAGS) $(AR_O) $^
@@ -53,10 +66,12 @@ define RULES
 $(TOOLS):     THISLIB = $(FULLNAME:%=$(LD_LIB))
 $(TESTPROGS): THISLIB = $(SUBDIR)$(LIBNAME)
 
-$(LIBOBJS): CPPFLAGS += -DBUILDING_$(NAME)
+$(NAME)LINK_EXE_ARGS = $(LDFLAGS) $(LDEXEFLAGS)
+$(NAME)LINK_SO_ARGS = $(SHFLAGS) $(LDFLAGS) $(LDSOFLAGS)
+$(NAME)LINK_EXTRA = $(FFEXTRALIBS)
 
 $(TESTPROGS) $(TOOLS): %$(EXESUF): %.o
-	$$(LD) $(LDFLAGS) $(LDEXEFLAGS) $$(LD_O) $$(filter %.o,$$^) $$(THISLIB) $(FFEXTRALIBS) $$(EXTRALIBS-$$(*F)) $$(ELIBS)
+	$$(call LINK,$$(call $(NAME)LINK_EXE_ARGS) $$(LD_O) $$(filter %.o,$$^) $$(THISLIB) $$(call $(NAME)LINK_EXTRA) $$(EXTRALIBS-$$(*F)) $$(ELIBS))
 
 $(SUBDIR)lib$(NAME).version: $(SUBDIR)version.h $(SUBDIR)version_major.h | $(SUBDIR)
 	$$(M) $$(SRC_PATH)/ffbuild/libversion.sh $(NAME) $$^ > $$@
@@ -71,12 +86,18 @@ $(SUBDIR)$(SLIBNAME): $(SUBDIR)$(SLIBNAME_WITH_MAJOR)
 	$(Q)cd ./$(SUBDIR) && $(LN_S) $(SLIBNAME_WITH_MAJOR) $(SLIBNAME)
 
 $(SUBDIR)$(SLIBNAME_WITH_MAJOR): $(OBJS) $(SHLIBOBJS) $(SUBDIR)lib$(NAME).ver
+ifeq ($(RESPONSE_FILES),yes)
+ifeq ($(HAVE_BUILTIN_FILE),yes)
+	$$(file >$$@.objs,$$(filter %.o,$$^))
+else
+	$(Q)echo $$(filter %.o,$$^) > $$@.objs
+endif
+endif
 	$(SLIB_CREATE_DEF_CMD)
 ifeq ($(RESPONSE_FILES),yes)
-	$(Q)echo $$(filter %.o,$$^) > $$@.objs
-	$$(LD) $(SHFLAGS) $(LDFLAGS) $(LDSOFLAGS) $$(LD_O) @$$@.objs $(FFEXTRALIBS)
+	$$(call LINK,$$(call $(NAME)LINK_SO_ARGS) $$(LD_O) @$$@.objs $$(call $(NAME)LINK_EXTRA))
 else
-	$$(LD) $(SHFLAGS) $(LDFLAGS) $(LDSOFLAGS) $$(LD_O) $$(filter %.o,$$^) $(FFEXTRALIBS)
+	$$(call LINK,$$(call $(NAME)LINK_SO_ARGS) $$(LD_O) $$(filter %.o,$$^) $$(call $(NAME)LINK_EXTRA))
 endif
 	$(SLIB_EXTRA_CMD)
 	-$(RM) $$@.objs

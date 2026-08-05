@@ -205,19 +205,10 @@ int enc_open(void *opaque, const AVFrame *frame)
         av_assert0(frame->opaque_ref);
         fd = (FrameData*)frame->opaque_ref->data;
 
-        for (int i = 0; i < frame->nb_side_data; i++) {
-            const AVSideDataDescriptor *desc = av_frame_side_data_desc(frame->side_data[i]->type);
-
-            if (!(desc->props & AV_SIDE_DATA_PROP_GLOBAL))
-                continue;
-
-            ret = av_frame_side_data_clone(&enc_ctx->decoded_side_data,
-                                           &enc_ctx->nb_decoded_side_data,
-                                           frame->side_data[i],
-                                           AV_FRAME_SIDE_DATA_FLAG_UNIQUE);
-            if (ret < 0)
-                return ret;
-        }
+        ret = clone_side_data(&enc_ctx->decoded_side_data, &enc_ctx->nb_decoded_side_data,
+                              fd->side_data, fd->nb_side_data, AV_FRAME_SIDE_DATA_FLAG_UNIQUE);
+        if (ret < 0)
+            return ret;
     }
 
     if (ist)
@@ -236,6 +227,9 @@ int enc_open(void *opaque, const AVFrame *frame)
                    frame->ch_layout.nb_channels > 0);
         enc_ctx->sample_fmt     = frame->format;
         enc_ctx->sample_rate    = frame->sample_rate;
+        if (!enc_ctx->frame_size && (!(enc->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) ||
+                                      (enc_ctx->flags2 & AV_CODEC_FLAG2_FIXED_FRAME_SIZE)))
+            enc_ctx->frame_size = frame->nb_samples;
         ret = av_channel_layout_copy(&enc_ctx->ch_layout, &frame->ch_layout);
         if (ret < 0)
             return ret;
@@ -266,24 +260,31 @@ int enc_open(void *opaque, const AVFrame *frame)
             enc_ctx->bits_per_raw_sample = FFMIN(fd->bits_per_raw_sample,
                                                  av_pix_fmt_desc_get(enc_ctx->pix_fmt)->comp[0].depth);
 
+        /**
+         * The video color properties should always be in sync with the user-
+         * requested values, since we forward them to the filter graph.
+         */
         enc_ctx->color_range            = frame->color_range;
         enc_ctx->color_primaries        = frame->color_primaries;
         enc_ctx->color_trc              = frame->color_trc;
         enc_ctx->colorspace             = frame->colorspace;
-        enc_ctx->chroma_sample_location = frame->chroma_location;
+        enc_ctx->alpha_mode             = frame->alpha_mode;
+
+        /* Video properties which are not part of filter graph negotiation */
+        if (enc_ctx->chroma_sample_location == AVCHROMA_LOC_UNSPECIFIED) {
+            enc_ctx->chroma_sample_location = frame->chroma_location;
+        } else if (enc_ctx->chroma_sample_location != frame->chroma_location &&
+                   frame->chroma_location != AVCHROMA_LOC_UNSPECIFIED) {
+            av_log(e, AV_LOG_WARNING,
+                   "Requested chroma sample location '%s' does not match the "
+                   "frame tagged sample location '%s'; result may be incorrect.\n",
+                   av_chroma_location_name(enc_ctx->chroma_sample_location),
+                   av_chroma_location_name(frame->chroma_location));
+        }
 
         if (enc_ctx->flags & (AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME) ||
-            (frame->flags & AV_FRAME_FLAG_INTERLACED)
-#if FFMPEG_OPT_TOP
-            || ost->top_field_first >= 0
-#endif
-            ) {
-            int top_field_first =
-#if FFMPEG_OPT_TOP
-                ost->top_field_first >= 0 ?
-                ost->top_field_first :
-#endif
-                !!(frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST);
+            (frame->flags & AV_FRAME_FLAG_INTERLACED)) {
+            int top_field_first = !!(frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST);
 
             if (enc->id == AV_CODEC_ID_MJPEG)
                 enc_ctx->field_order = top_field_first ? AV_FIELD_TT : AV_FIELD_BB;
@@ -721,7 +722,7 @@ static int encode_frame(OutputFile *of, OutputStream *ost, AVFrame *frame,
         }
     }
 
-    av_assert0(0);
+    av_unreachable("encode_frame() loop should return");
 }
 
 static enum AVPictureType forced_kf_apply(void *logctx, KeyframeForceCtx *kf,
@@ -761,6 +762,9 @@ static enum AVPictureType forced_kf_apply(void *logctx, KeyframeForceCtx *kf,
         }
     } else if (kf->type == KF_FORCE_SOURCE && (frame->flags & AV_FRAME_FLAG_KEY)) {
         goto force_keyframe;
+    } else if (kf->type == KF_FORCE_SCD_METADATA &&
+               av_dict_get(frame->metadata, "lavfi.scd.time", NULL, 0)) {
+        goto force_keyframe;
     }
 
     return AV_PICTURE_TYPE_NONE;
@@ -792,13 +796,6 @@ static int frame_encode(OutputStream *ost, AVFrame *frame, AVPacket *pkt)
         if (type == AVMEDIA_TYPE_VIDEO) {
             frame->quality   = e->enc_ctx->global_quality;
             frame->pict_type = forced_kf_apply(e, &ost->kf, frame);
-
-#if FFMPEG_OPT_TOP
-            if (ost->top_field_first >= 0) {
-                frame->flags &= ~AV_FRAME_FLAG_TOP_FIELD_FIRST;
-                frame->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST * (!!ost->top_field_first);
-            }
-#endif
         } else {
             if (!(e->enc_ctx->codec->capabilities & AV_CODEC_CAP_PARAM_CHANGE) &&
                 e->enc_ctx->ch_layout.nb_channels != frame->ch_layout.nb_channels) {

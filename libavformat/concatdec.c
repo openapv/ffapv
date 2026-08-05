@@ -18,6 +18,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "libavutil/attributes_internal.h"
 #include "libavutil/avstring.h"
 #include "libavutil/avassert.h"
 #include "libavutil/bprint.h"
@@ -72,6 +73,7 @@ typedef struct {
     ConcatMatchMode stream_match_mode;
     unsigned auto_convert;
     int segment_time_metadata;
+    int recursion_depth;
 } ConcatContext;
 
 static int concat_probe(const AVProbeData *probe)
@@ -356,6 +358,12 @@ static int open_file(AVFormatContext *avf, unsigned fileno)
     if (ret < 0)
         return ret;
 
+    ret = av_dict_set_int(&options, "recursion_depth", cat->recursion_depth - 1, 0);
+    if (ret < 0) {
+        av_dict_free(&options);
+        return ret;
+    }
+
     if ((ret = avformat_open_input(&cat->avf, file->url, NULL, &options)) < 0 ||
         (ret = avformat_find_stream_info(cat->avf, NULL)) < 0) {
         av_log(avf, AV_LOG_ERROR, "Impossible to open '%s'\n", file->url);
@@ -363,6 +371,7 @@ static int open_file(AVFormatContext *avf, unsigned fileno)
         avformat_close_input(&cat->avf);
         return ret;
     }
+    av_dict_set(&options, "recursion_depth", NULL, 0);
     if (options) {
         av_log(avf, AV_LOG_WARNING, "Unused options for '%s'.\n", file->url);
         /* TODO log unused options once we have a proper string API */
@@ -419,7 +428,7 @@ static int concat_read_close(AVFormatContext *avf)
 
 typedef struct ParseSyntax {
     const char *keyword;
-    char args[MAX_ARGS];
+    attribute_nonstring char args[MAX_ARGS];
     uint8_t flags;
 } ParseSyntax;
 
@@ -663,6 +672,11 @@ static int concat_read_header(AVFormatContext *avf)
     int64_t time = 0;
     unsigned i;
     int ret;
+
+    if (cat->recursion_depth <= 0) {
+        av_log(avf, AV_LOG_ERROR, "Too deep recursion\n");
+        return AVERROR_INVALIDDATA;
+    }
 
     ret = concat_parse_script(avf);
     if (ret < 0)
@@ -939,6 +953,8 @@ static const AVOption options[] = {
       OFFSET(auto_convert), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, DEC },
     { "segment_time_metadata", "output file segment start time and duration as packet metadata",
       OFFSET(segment_time_metadata), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, DEC },
+    { "recursion_depth", "max recursion depth",
+      OFFSET(recursion_depth), AV_OPT_TYPE_INT, {.i64 = 10}, 0, INT_MAX, DEC },
     { NULL }
 };
 

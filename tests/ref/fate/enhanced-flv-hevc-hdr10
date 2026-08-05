@@ -1,4 +1,6 @@
-#extradata 0:      111, 0x091d1885
+b0de4208f06896778e948558cd9abae7 *tests/data/fate/enhanced-flv-hevc-hdr10.flv
+78196 tests/data/fate/enhanced-flv-hevc-hdr10.flv
+#extradata 0:      110, 0xf07e1884
 #tb 0: 1/1000
 #media_type 0: video
 #codec_id 0: hevc
@@ -17,7 +19,7 @@ best_effort_timestamp=0
 best_effort_timestamp_time=0.000000
 duration=N/A
 duration_time=N/A
-pkt_pos=459
+pkt_pos=458
 pkt_size=77718
 width=1280
 height=720
@@ -37,6 +39,7 @@ color_space=bt2020nc
 color_primaries=bt2020
 color_transfer=smpte2084
 chroma_location=left
+alpha_mode=unspecified
 [SIDE_DATA]
 side_data_type=Mastering display metadata
 red_x=13250/50000

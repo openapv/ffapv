@@ -588,7 +588,7 @@ static int parse_psfile(AVFilterContext *ctx, const char *fname)
     CurvesContext *curves = ctx->priv;
     uint8_t *buf;
     size_t size;
-    int i, ret, av_unused(version), nb_curves;
+    int i, ret, version av_unused, nb_curves;
     AVBPrint ptstr;
     static const int comp_ids[] = {3, 0, 1, 2};
 
@@ -641,7 +641,7 @@ end:
 
 static int dump_curves(const char *fname, uint16_t *graph[NB_COMP + 1],
                        struct keypoint *comp_points[NB_COMP + 1],
-                       int lut_size)
+                       int lut_size, void *log_ctx)
 {
     int i;
     AVBPrint buf;
@@ -653,7 +653,7 @@ static int dump_curves(const char *fname, uint16_t *graph[NB_COMP + 1],
 
     if (!f) {
         int ret = AVERROR(errno);
-        av_log(NULL, AV_LOG_ERROR, "Cannot open file '%s' for writing: %s\n",
+        av_log(log_ctx, AV_LOG_ERROR, "Cannot open file '%s' for writing: %s\n",
                fname, av_err2str(ret));
         return ret;
     }
@@ -757,8 +757,8 @@ static int filter_slice_packed(AVFilterContext *ctx, void *arg, int jobnr, int n
     const uint8_t g = curves->rgba_map[G];
     const uint8_t b = curves->rgba_map[B];
     const uint8_t a = curves->rgba_map[A];
-    const int slice_start = (in->height *  jobnr   ) / nb_jobs;
-    const int slice_end   = (in->height * (jobnr+1)) / nb_jobs;
+    const int slice_start = ff_slice_pos(in->height, jobnr, nb_jobs);
+    const int slice_end   = ff_slice_pos(in->height, jobnr + 1, nb_jobs);
 
     if (curves->is_16bit) {
         for (y = slice_start; y < slice_end; y++) {
@@ -805,8 +805,8 @@ static int filter_slice_planar(AVFilterContext *ctx, void *arg, int jobnr, int n
     const uint8_t g = curves->rgba_map[G];
     const uint8_t b = curves->rgba_map[B];
     const uint8_t a = curves->rgba_map[A];
-    const int slice_start = (in->height *  jobnr   ) / nb_jobs;
-    const int slice_end   = (in->height * (jobnr+1)) / nb_jobs;
+    const int slice_start = ff_slice_pos(in->height, jobnr, nb_jobs);
+    const int slice_end   = ff_slice_pos(in->height, jobnr + 1, nb_jobs);
 
     if (curves->is_16bit) {
         for (y = slice_start; y < slice_end; y++) {
@@ -912,7 +912,7 @@ static int config_input(AVFilterLink *inlink)
     }
 
     if (curves->plot_filename && !curves->saved_plot) {
-        dump_curves(curves->plot_filename, curves->graph, comp_points, curves->lut_size);
+        dump_curves(curves->plot_filename, curves->graph, comp_points, curves->lut_size, ctx);
         curves->saved_plot = 1;
     }
 

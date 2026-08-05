@@ -67,7 +67,7 @@ static int FUNC(extension_data)(CodedBitstreamContext *ctx, RWContext *rw,
     GetBitContext start;
     uint8_t bit;
     start = *rw;
-    for (k = 0; cbs_h2645_read_more_rbsp_data(rw); k++)
+    for (k = 0; ff_cbs_h2645_read_more_rbsp_data(rw); k++)
         skip_bits(rw, 1);
     current->bit_length = k;
     if (k > 0) {
@@ -489,6 +489,10 @@ static int FUNC(vps)(CodedBitstreamContext *ctx, RWContext *rw,
         if (current->vps_poc_proportional_to_timing_flag)
             ue(vps_num_ticks_poc_diff_one_minus1, 0, UINT32_MAX - 1);
         ue(vps_num_hrd_parameters, 0, current->vps_num_layer_sets_minus1 + 1);
+        if (current->vps_num_hrd_parameters > 0)
+            allocate(current->hrd_parameters,
+                     current->vps_num_hrd_parameters *
+                     sizeof(*current->hrd_parameters));
         for (i = 0; i < current->vps_num_hrd_parameters; i++) {
             ues(hrd_layer_set_idx[i],
                 current->vps_base_layer_internal_flag ? 0 : 1,
@@ -1915,7 +1919,7 @@ SEI_FUNC(sei_buffering_period, (CodedBitstreamContext *ctx, RWContext *rw,
 
 #ifdef READ
     end_pos = get_bits_count(rw);
-    if (cbs_h265_payload_extension_present(rw, sei->payload_size,
+    if (ff_cbs_h2645_payload_extension_present(rw, sei->payload_size,
                                            end_pos - start_pos))
         flag(use_alt_cpb_params_flag);
     else

@@ -24,11 +24,14 @@
 
 #include "config.h"
 
+#include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
 #include "libavutil/dict.h"
 #include "libavutil/internal.h"
 #include "libavutil/mem.h"
+#include "libavutil/opt.h"
+#include "libavutil/parseutils.h"
 #include "libavutil/time.h"
 #include "libavutil/time_internal.h"
 
@@ -41,6 +44,7 @@
 #include "network.h"
 #endif
 #include "os_support.h"
+#include "urldecode.h"
 
 /**
  * @file
@@ -116,9 +120,12 @@ int av_append_packet(AVIOContext *s, AVPacket *pkt, int size)
 
 int av_filename_number_test(const char *filename)
 {
-    char buf[1024];
-    return filename &&
-           (av_get_frame_filename(buf, sizeof(buf), filename, 1) >= 0);
+    AVBPrint bp;
+
+    if (!filename)
+        return 0;
+    av_bprint_init(&bp, 0, AV_BPRINT_SIZE_COUNT_ONLY);
+    return (ff_bprint_get_frame_filename(&bp, filename, 1, AV_FRAME_FILENAME_FLAGS_IGNORE_TRUNCATION) >= 0);
 }
 
 /**********************************************************/
@@ -257,7 +264,7 @@ uint64_t ff_get_formatted_ntp_time(uint64_t ntp_time_us)
     uint64_t ntp_ts, frac_part, sec;
     uint32_t usec;
 
-    //current ntp time in seconds and micro seconds
+    //current ntp time in seconds and microseconds
     sec = ntp_time_us / 1000000;
     usec = ntp_time_us % 1000000;
 
@@ -327,7 +334,7 @@ addchar:
     }
     if (!percentd_found)
         goto fail;
-    if (!av_bprint_is_complete(buf))
+    if (!(flags & AV_FRAME_FILENAME_FLAGS_IGNORE_TRUNCATION) && !av_bprint_is_complete(buf))
         return AVERROR(ENOMEM);
     return 0;
 fail:
@@ -436,6 +443,12 @@ int ff_mkdir_p(const char *path)
             tmp_ch = *pos;
             *pos = '\0';
             ret = mkdir(temp, 0755);
+            if (ret < 0 && errno != EEXIST) {
+                int err = errno;
+                av_free(temp);
+                errno = err;
+                return ret;
+            }
             *pos = tmp_ch;
         }
     }
@@ -602,16 +615,98 @@ int ff_bprint_to_codecpar_extradata(AVCodecParameters *par, struct AVBPrint *buf
 
 int ff_dict_set_timestamp(AVDictionary **dict, const char *key, int64_t timestamp)
 {
-    time_t seconds = timestamp / 1000000;
+    int microsecs = timestamp % 1000000;
+    time_t seconds = timestamp / 1000000 - (microsecs < 0);
     struct tm *ptm, tmbuf;
     ptm = gmtime_r(&seconds, &tmbuf);
     if (ptm) {
         char buf[32];
         if (!strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", ptm))
             return AVERROR_EXTERNAL;
-        av_strlcatf(buf, sizeof(buf), ".%06dZ", (int)(timestamp % 1000000));
+        av_strlcatf(buf, sizeof(buf), ".%06dZ", microsecs + (microsecs < 0) * 1000000);
         return av_dict_set(dict, key, buf, 0);
     } else {
         return AVERROR_EXTERNAL;
     }
+}
+
+static const AVOption* find_opt(void *obj, const char *name, size_t len)
+{
+    char decoded_name[128];
+
+    if (ff_urldecode_len(decoded_name, sizeof(decoded_name), name, len, 1) < 0)
+        return NULL;
+
+    return av_opt_find(obj, decoded_name, NULL, 0, 0);
+}
+
+int ff_parse_opts_from_query_string(void *obj, const char *str, int allow_unknown)
+{
+    const AVOption *opt;
+    char optval[512];
+    int ret;
+
+    if (*str == '?')
+        str++;
+    while (*str) {
+        size_t len = strcspn(str, "=&");
+        opt = find_opt(obj, str, len);
+        if (!opt) {
+            if (!allow_unknown) {
+                av_log(obj, AV_LOG_ERROR, "Query string option '%.*s' does not exist\n", (int)len, str);
+                return AVERROR_OPTION_NOT_FOUND;
+            }
+            av_log(obj, AV_LOG_VERBOSE, "Ignoring unknown query string option '%.*s'\n", (int)len, str);
+        }
+        str += len;
+        if (!opt) {
+            len = strcspn(str, "&");
+            str += len;
+        } else if (*str == '&' || *str == '\0') {
+            /* Check for bool options without value, e.g. "?verify".
+             * Unfortunately "listen" is a tri-state INT for some protocols so
+             * we also have to allow that for backward compatibility. */
+            if (opt->type != AV_OPT_TYPE_BOOL && strcmp(opt->name, "listen")) {
+                av_log(obj, AV_LOG_ERROR, "Non-bool query string option '%s' has no value\n", opt->name);
+                return AVERROR(EINVAL);
+            }
+            ret = av_opt_set_int(obj, opt->name, 1, 0);
+            if (ret < 0)
+                return ret;
+        } else {
+            av_assert2(*str == '=');
+            str++;
+            len = strcspn(str, "&");
+            if (ff_urldecode_len(optval, sizeof(optval), str, len, 1) < 0) {
+                av_log(obj, AV_LOG_ERROR, "Query string option '%s' value is too long\n", opt->name);
+                return AVERROR(EINVAL);
+            }
+            ret = av_opt_set(obj, opt->name, optval, 0);
+            if (ret < 0)
+                return ret;
+            str += len;
+        }
+        if (*str)
+            str++;
+    }
+    return 0;
+}
+
+void *ff_bprint_finalize_as_fam(struct AVBPrint *bp, const void *struct_ptr, size_t fam_offset)
+{
+    if (!av_bprint_is_complete(bp)) {
+        av_bprint_finalize(bp, NULL);
+        return NULL;
+    }
+
+    uint8_t *p = av_malloc(fam_offset + bp->len);
+    if (!p) {
+        av_bprint_finalize(bp, NULL);
+        return NULL;
+    }
+    memcpy(p, struct_ptr, fam_offset);
+    memcpy(p + fam_offset, bp->str, bp->len);
+    av_bprint_finalize(bp, NULL);
+
+    return p;
 }

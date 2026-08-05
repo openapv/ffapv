@@ -351,6 +351,10 @@ int main(int argc, char **argv)
     }
     setting_number = (argc - 5) / 2;
     dynamic_setting = av_malloc(setting_number * sizeof(*dynamic_setting));
+    if (!dynamic_setting) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
     current_setting_number = 0;
     for (int i = 0; i < setting_number; i++) {
         dynamic_setting[i].frame_number = atoi(argv[i*2 + 5]);
@@ -426,7 +430,9 @@ int main(int argc, char **argv)
 
 end:
     avformat_close_input(&ifmt_ctx);
-    avformat_close_input(&ofmt_ctx);
+    if (ofmt_ctx && !(ofmt_ctx->oformat->flags & AVFMT_NOFILE))
+        avio_closep(&ofmt_ctx->pb);
+    avformat_free_context(ofmt_ctx);
     avcodec_free_context(&decoder_ctx);
     avcodec_free_context(&encoder_ctx);
     av_buffer_unref(&hw_device_ctx);

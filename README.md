@@ -16,8 +16,7 @@ ffmpeg -c:v liboapv -i inputfile.yuv -pix_fmt yuv422p10le -f rawvideo out.yuv
 
 Rest functionallities are the same as in pure ffmpeg.  
 
-FFmpeg README
-=============
+# FFmpeg README
 
 FFmpeg is a collection of libraries and tools to process multimedia content
 such as audio, video, subtitles and related metadata.

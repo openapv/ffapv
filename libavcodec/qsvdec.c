@@ -176,7 +176,7 @@ static int qsv_get_continuous_buffer(AVCodecContext *avctx, AVFrame *frame,
             frame->linesize[0] * FFALIGN(avctx->coded_height, 64);
     }
 
-    ret = ff_attach_decode_data(frame);
+    ret = ff_attach_decode_data(avctx, frame);
     if (ret < 0)
         return ret;
 
@@ -202,6 +202,7 @@ static int qsv_init_session(AVCodecContext *avctx, QSVContext *q, mfxSession ses
             MFXClose(q->internal_qs.session);
             q->internal_qs.session = NULL;
         }
+        av_refstruct_unref(&q->frames_ctx.mids);
         av_buffer_unref(&q->frames_ctx.hw_frames_ctx);
 
         q->frames_ctx.hw_frames_ctx = av_buffer_ref(hw_frames_ref);

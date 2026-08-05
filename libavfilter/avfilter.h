@@ -37,7 +37,6 @@
 
 #include <stddef.h>
 
-#include "libavutil/attributes.h"
 #include "libavutil/avutil.h"
 #include "libavutil/buffer.h"
 #include "libavutil/dict.h"
@@ -140,6 +139,11 @@ typedef struct AVFilterFormatsConfig {
      */
     AVFilterFormats *color_spaces;  ///< AVColorSpace
     AVFilterFormats *color_ranges;  ///< AVColorRange
+
+    /**
+     * List of supported alpha modes, only for video with an alpha channel.
+     */
+    AVFilterFormats *alpha_modes;  ///< AVAlphaMode
 
 } AVFilterFormatsConfig;
 
@@ -310,26 +314,7 @@ typedef struct AVFilterContext {
      */
     int nb_threads;
 
-#if FF_API_CONTEXT_PUBLIC
-    /**
-     * @deprecated unused
-     */
-    attribute_deprecated
-    struct AVFilterCommand *command_queue;
-#endif
-
     char *enable_str;               ///< enable expression string
-#if FF_API_CONTEXT_PUBLIC
-    /**
-     * @deprecated unused
-     */
-    attribute_deprecated
-    void *enable;
-    /**
-     * @deprecated unused
-     */
-    double *var_values;
-#endif
     /**
      * MUST NOT be accessed from outside avfilter.
      *
@@ -349,14 +334,6 @@ typedef struct AVFilterContext {
      * avfilter_init_dict().
      */
     AVBufferRef *hw_device_ctx;
-
-#if FF_API_CONTEXT_PUBLIC
-    /**
-     * @deprecated this field should never have been accessed by callers
-     */
-    attribute_deprecated
-    unsigned ready;
-#endif
 
     /**
      * Sets the number of extra hardware frames which the filter will
@@ -427,6 +404,8 @@ struct AVFilterLink {
 
     AVFrameSideData **side_data;
     int nb_side_data;
+
+    enum AVAlphaMode alpha_mode; ///< alpha mode (for videos with an alpha channel)
 
     /*****************************************************************
      * All fields below this line are not part of the public API. They

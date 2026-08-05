@@ -140,7 +140,7 @@ static int config_input(AVFilterLink *inlink)
         s->dsp.limiter = limiter16;
     }
 
-#if ARCH_X86
+#if ARCH_X86 && HAVE_X86ASM
     ff_limiter_init_x86(&s->dsp, desc->comp[0].depth);
 #endif
 
@@ -157,8 +157,8 @@ static int filter_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
 
     for (p = 0; p < s->nb_planes; p++) {
         const int h = s->height[p];
-        const int slice_start = (h * jobnr) / nb_jobs;
-        const int slice_end = (h * (jobnr+1)) / nb_jobs;
+        const int slice_start = ff_slice_pos(h, jobnr, nb_jobs);
+        const int slice_end = ff_slice_pos(h, jobnr + 1, nb_jobs);
 
         if (!((1 << p) & s->planes)) {
             if (out != in)

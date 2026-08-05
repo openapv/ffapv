@@ -205,6 +205,39 @@ FFmpeg can make use of this library, originating in Modplug-XMMS, to read from M
 See @url{https://github.com/Konstanty/libmodplug}. Pass @code{--enable-libmodplug} to configure to
 enable it.
 
+@section ONNX Runtime
+
+FFmpeg can make use of the ONNX Runtime library as a backend for DNN based filters.
+
+Go to @url{https://onnxruntime.ai/} and follow the instructions for installing
+the library. Pre-built packages are available for various platforms.
+
+Configure FFmpeg with ONNX Runtime support:
+
+@example
+./configure \
+    --enable-libonnxruntime \
+    --extra-cflags="-I/path/to/onnxruntime/include" \
+    --extra-ldflags="-L/path/to/onnxruntime/lib"
+@end example
+
+On ELF-based systems (Linux, BSD) you may also want to embed the
+library search path so that the installed @file{ffmpeg} binary finds the
+shared library at run time without setting @env{LD_LIBRARY_PATH}:
+
+@example
+./configure \
+    --enable-libonnxruntime \
+    --extra-cflags="-I/path/to/onnxruntime/include" \
+    --extra-ldflags="-L/path/to/onnxruntime/lib -Wl,-rpath,/path/to/onnxruntime/lib"
+@end example
+
+The @code{-Wl,-rpath} flag is ELF-specific and should be omitted on
+other platforms (Windows, macOS).
+
+For MinGW GCC builds, add the @code{-D_stdcall=__stdcall} flag for compatibility
+with ONNX Runtime headers.
+
 @section OpenCORE, VisualOn, and Fraunhofer libraries
 
 Spun off Google Android sources, OpenCore, VisualOn and Fraunhofer
@@ -250,6 +283,14 @@ Go to @url{http://sourceforge.net/projects/opencore-amr/} and follow the
 instructions for installing the library.
 Then pass @code{--enable-libfdk-aac} to configure to enable it.
 
+@subsection Fraunhofer MPEG-H 3D Audio decoder library
+
+FFmpeg can make use of the Fraunhofer MPEG-H decoder library for MPEG-H 3DA decoding.
+
+Go to @url{https://github.com/Fraunhofer-IIS/mpeghdec} and follow the
+instructions for installing the library.
+Then pass @code{--enable-libmpeghdec --enable-nonfree} to configure to enable it.
+
 @subsection LC3 library
 
 FFmpeg can make use of the Google LC3 library for LC3 decoding & encoding.
@@ -293,6 +334,15 @@ FFmpeg can make use of the Scalable Video Technology for AV1 library for AV1 enc
 
 Go to @url{https://gitlab.com/AOMediaCodec/SVT-AV1/} and follow the instructions
 for installing the library. Then pass @code{--enable-libsvtav1} to configure to
+enable it.
+
+@section SVT-JPEG-XS
+
+FFmpeg can make use of the Scalable Video Technology for JPEG-XS library for JPEG-XS
+decoding and encoding.
+
+Go to @url{https://github.com/OpenVisualCloud/SVT-JPEG-XS} and follow the instructions
+for installing the library. Then pass @code{--enable-libsvtjpegxs} to configure to
 enable it.
 
 @section TwoLAME
@@ -811,6 +861,8 @@ following image formats are supported:
     @tab Progressive JPEG is not supported.
 @item JPEG 2000    @tab X @tab X
 @item JPEG-LS      @tab X @tab X
+@item JPEG-XS      @tab E @tab E
+    @tab Supported through external library libsvtjpegxs
 @item LJPEG        @tab X @tab
     @tab Lossless JPEG
 @item Media 100    @tab   @tab X
@@ -1276,8 +1328,6 @@ following image formats are supported:
 @item Bink Audio             @tab     @tab  X
     @tab Used in Bink and Smacker files in many games.
 @item Bonk audio             @tab     @tab  X
-@item CELT                   @tab     @tab  E
-    @tab decoding supported through external library libcelt
 @item codec2                 @tab  E  @tab  E
     @tab en/decoding supported through external library libcodec2
 @item CRI HCA                @tab     @tab X
@@ -1344,6 +1394,8 @@ following image formats are supported:
 @item MP3 (MPEG audio layer 3)  @tab  E  @tab IX
     @tab encoding supported through external library LAME, ADU MP3 and MP3onMP4 also supported
 @item MPEG-4 Audio Lossless Coding (ALS)  @tab     @tab  X
+@item MPEG-H 3D Audio        @tab     @tab  E
+    @tab decoding supported through external library libmpeghdec
 @item MobiClip FastAudio     @tab     @tab  X
 @item Musepack SV7           @tab     @tab  X
 @item Musepack SV8           @tab     @tab  X

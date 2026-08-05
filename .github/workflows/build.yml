@@ -47,15 +47,13 @@ jobs:
             nasm \
             zlib1g-dev
 
-          sudo apt-get install -y jq
-
-      - name: Fetch and install openAPV dependency
+      - name: Build and install openAPV dependency
         run: |
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/AcademySoftwareFoundation/openapv/releases/latest)
-          DEPENDENCY_URL=$(echo $LATEST_RELEASE | jq -r '.assets[] | select(.name | endswith("amd64.deb")) | .browser_download_url + " " + .name' | sort -V | tail -n 1 | awk '{print $1}')
-          wget $DEPENDENCY_URL -O openapv.deb
-          sudo dpkg -i openapv.deb
-          sudo apt-get install -f
+          git clone --depth 1 https://github.com/AcademySoftwareFoundation/openapv.git
+          cmake -S openapv -B openapv/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build openapv/build -j$(nproc)
+          sudo cmake --install openapv/build
+          sudo ldconfig
 
       - name: Build FFmpeg
         run: |         

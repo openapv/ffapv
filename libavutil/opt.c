@@ -39,7 +39,6 @@
 #include "opt.h"
 #include "samplefmt.h"
 #include "bprint.h"
-#include "version.h"
 
 #include <float.h>
 
@@ -191,20 +190,12 @@ static int opt_set_init(void *obj, const char *name, int search_flags,
 
         // try state flags first from the target (child), then from its parent
         class = *(const AVClass**)tgt;
-        if (
-#if LIBAVUTIL_VERSION_MAJOR < 60
-            class->version >= AV_VERSION_INT(59, 41, 100) &&
-#endif
-            class->state_flags_offset)
+        if (class->state_flags_offset)
             state_flags = (unsigned*)((uint8_t*)tgt + class->state_flags_offset);
 
         if (!state_flags && obj != tgt) {
             class = *(const AVClass**)obj;
-            if (
-#if LIBAVUTIL_VERSION_MAJOR < 60
-                class->version >= AV_VERSION_INT(59, 41, 100) &&
-#endif
-                class->state_flags_offset)
+            if (class->state_flags_offset)
                 state_flags = (unsigned*)((uint8_t*)obj + class->state_flags_offset);
         }
 
@@ -212,9 +203,7 @@ static int opt_set_init(void *obj, const char *name, int search_flags,
             av_log(obj, AV_LOG_ERROR, "Option '%s' is not a runtime option and "
                    "so cannot be set after the object has been initialized\n",
                    o->name);
-#if LIBAVUTIL_VERSION_MAJOR >= 60
             return AVERROR(EINVAL);
-#endif
         }
     }
 
@@ -490,7 +479,7 @@ static int set_string_number(void *obj, void *target_obj, const AVOption *o, con
                 res = av_expr_parse_and_eval(&d, i ? buf : val, const_names,
                                             const_values, NULL, NULL, NULL, NULL, NULL, 0, obj);
                 if (res < 0) {
-                    av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\"\n", val);
+                    av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\"\n", o->name, val);
                     return res;
                 }
             }
@@ -522,7 +511,7 @@ static int set_string_image_size(void *obj, const AVOption *o, const char *val, 
     }
     ret = av_parse_video_size(dst, dst + 1, val);
     if (ret < 0)
-        av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\" as image size\n", val);
+        av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\" as image size\n", o->name, val);
     return ret;
 }
 
@@ -530,7 +519,7 @@ static int set_string_video_rate(void *obj, const AVOption *o, const char *val, 
 {
     int ret = av_parse_video_rate(dst, val);
     if (ret < 0)
-        av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\" as video rate\n", val);
+        av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\" as video rate\n", o->name, val);
     return ret;
 }
 
@@ -543,7 +532,7 @@ static int set_string_color(void *obj, const AVOption *o, const char *val, uint8
     } else {
         ret = av_parse_color(dst, val, -1, obj);
         if (ret < 0)
-            av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\" as color\n", val);
+            av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\" as color\n", o->name, val);
         return ret;
     }
     return 0;
@@ -583,7 +572,7 @@ static int set_string_bool(void *obj, const AVOption *o, const char *val, int *d
     return 0;
 
 fail:
-    av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\" as boolean\n", val);
+    av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\" as boolean\n", o->name, val);
     return AVERROR(EINVAL);
 }
 
@@ -601,7 +590,7 @@ static int set_string_fmt(void *obj, const AVOption *o, const char *val, uint8_t
             fmt = strtol(val, &tail, 0);
             if (*tail || (unsigned)fmt >= fmt_nb) {
                 av_log(obj, AV_LOG_ERROR,
-                       "Unable to parse option value \"%s\" as %s\n", val, desc);
+                       "Unable to parse \"%s\" option value \"%s\" as %s\n", o->name, val, desc);
                 return AVERROR(EINVAL);
             }
         }
@@ -724,7 +713,7 @@ static int opt_set_elem(void *obj, void *target_obj, const AVOption *o,
             int64_t usecs = 0;
             if (val) {
                 if ((ret = av_parse_time(&usecs, val, 1)) < 0) {
-                    av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\" as duration\n", val);
+                    av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\" as duration\n", o->name, val);
                     return ret;
                 }
             }
@@ -741,7 +730,7 @@ static int opt_set_elem(void *obj, void *target_obj, const AVOption *o,
     case AV_OPT_TYPE_CHLAYOUT:
         ret = set_string_channel_layout(obj, o, val, dst);
         if (ret < 0) {
-            av_log(obj, AV_LOG_ERROR, "Unable to parse option value \"%s\" as channel layout\n", val);
+            av_log(obj, AV_LOG_ERROR, "Unable to parse \"%s\" option value \"%s\" as channel layout\n", o->name, val);
             ret = AVERROR(EINVAL);
         }
         return ret;
@@ -1336,7 +1325,7 @@ int av_opt_get_video_rate(void *obj, const char *name, int search_flags, AVRatio
     return av_opt_get_q(obj, name, search_flags, out_val);
 }
 
-static int get_format(void *obj, const char *name, int search_flags, int *out_fmt,
+static int get_format(void *obj, const char *name, int search_flags, void *out_fmt,
                       enum AVOptionType type, const char *desc)
 {
     void *dst, *target_obj;
@@ -1350,7 +1339,11 @@ static int get_format(void *obj, const char *name, int search_flags, int *out_fm
     }
 
     dst = ((uint8_t*)target_obj) + o->offset;
-    *out_fmt = *(int *)dst;
+    if (type == AV_OPT_TYPE_PIXEL_FMT)
+        *(enum AVPixelFormat *)out_fmt = *(enum AVPixelFormat *)dst;
+    else
+        *(enum AVSampleFormat*)out_fmt = *(enum AVSampleFormat*)dst;
+
     return 0;
 }
 
@@ -2054,18 +2047,6 @@ const AVClass *av_opt_child_class_iterate(const AVClass *parent, void **iter)
     return NULL;
 }
 
-#if FF_API_OPT_PTR
-void *av_opt_ptr(const AVClass *class, void *obj, const char *name)
-{
-    const AVOption *opt= av_opt_find2(&class, name, NULL, 0, AV_OPT_SEARCH_FAKE_OBJ, NULL);
-
-    // no direct access to array-type options
-    if (!opt || (opt->type & AV_OPT_TYPE_FLAG_ARRAY))
-        return NULL;
-    return (uint8_t*)obj + opt->offset;
-}
-#endif
-
 static int opt_copy_elem(void *logctx, enum AVOptionType type,
                          void *dst, const void *src)
 {
@@ -2602,6 +2583,8 @@ int av_opt_is_set_to_default(void *obj, const AVOption *o)
             ret = 0;
         else if (val)
             ret = !strcmp(val, def);
+        else
+            ret = 1;
 
         av_freep(&val);
 

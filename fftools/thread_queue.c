@@ -38,6 +38,7 @@ enum {
 };
 
 struct ThreadQueue {
+    int             choked;
     int              *finished;
     unsigned int    nb_streams;
 
@@ -157,6 +158,9 @@ static int receive_locked(ThreadQueue *tq, int *stream_idx,
 {
     unsigned int nb_finished = 0;
 
+    if (tq->choked)
+        return AVERROR(EAGAIN);
+
     while (av_container_fifo_read(tq->fifo, data, 0) >= 0) {
         unsigned idx;
         int ret;
@@ -190,7 +194,7 @@ static int receive_locked(ThreadQueue *tq, int *stream_idx,
     return nb_finished == tq->nb_streams ? AVERROR_EOF : AVERROR(EAGAIN);
 }
 
-int tq_receive(ThreadQueue *tq, int *stream_idx, void *data)
+int tq_receive(ThreadQueue *tq, int *stream_idx, void *data, int flags)
 {
     int ret;
 
@@ -207,7 +211,7 @@ int tq_receive(ThreadQueue *tq, int *stream_idx, void *data)
         if (can_read != av_container_fifo_can_read(tq->fifo))
             pthread_cond_broadcast(&tq->cond);
 
-        if (ret == AVERROR(EAGAIN)) {
+        if (ret == AVERROR(EAGAIN) && !(flags & THREAD_QUEUE_FLAG_NO_BLOCK)) {
             pthread_cond_wait(&tq->cond, &tq->lock);
             continue;
         }
@@ -230,6 +234,7 @@ void tq_send_finish(ThreadQueue *tq, unsigned int stream_idx)
      * next time the consumer thread tries to read this stream it will get
      * an EOF and recv-finished flag will be set */
     tq->finished[stream_idx] |= FINISHED_SEND;
+    tq->choked = 0;
     pthread_cond_broadcast(&tq->cond);
 
     pthread_mutex_unlock(&tq->lock);
@@ -246,6 +251,18 @@ void tq_receive_finish(ThreadQueue *tq, unsigned int stream_idx)
      * get an EOF and send-finished flag will be set */
     tq->finished[stream_idx] |= FINISHED_RECV;
     pthread_cond_broadcast(&tq->cond);
+
+    pthread_mutex_unlock(&tq->lock);
+}
+
+void tq_choke(ThreadQueue *tq, int choked)
+{
+    pthread_mutex_lock(&tq->lock);
+
+    int prev_choked = tq->choked;
+    tq->choked = choked;
+    if (choked != prev_choked)
+        pthread_cond_broadcast(&tq->cond);
 
     pthread_mutex_unlock(&tq->lock);
 }

@@ -76,6 +76,12 @@ typedef struct AssContext {
     {"fontsdir",       "set the directory containing the fonts to read",           OFFSET(fontsdir),   AV_OPT_TYPE_STRING,     {.str = NULL},  0, 0, FLAGS }, \
     {"alpha",          "enable processing of alpha channel",                       OFFSET(alpha),      AV_OPT_TYPE_BOOL,       {.i64 = 0   },         0,        1, FLAGS }, \
 
+#define SHAPING_OPTIONS \
+    {"shaping", "set shaping engine", OFFSET(shaping), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 1, FLAGS, .unit = "shaping_mode"}, \
+        {"auto",    NULL,              0, AV_OPT_TYPE_CONST, {.i64 = -1},                  INT_MIN, INT_MAX, FLAGS, .unit = "shaping_mode"}, \
+        {"simple",  "simple shaping",  0, AV_OPT_TYPE_CONST, {.i64 = ASS_SHAPING_SIMPLE},  INT_MIN, INT_MAX, FLAGS, .unit = "shaping_mode"}, \
+        {"complex", "complex shaping", 0, AV_OPT_TYPE_CONST, {.i64 = ASS_SHAPING_COMPLEX}, INT_MIN, INT_MAX, FLAGS, .unit = "shaping_mode"}, \
+
 /* libass supports a log level ranging from 0 to 7 */
 static const int ass_libavfilter_log_level_map[] = {
     [0] = AV_LOG_FATAL,     /* MSGL_FATAL */
@@ -189,7 +195,7 @@ static int config_input(AVFilterLink *inlink)
     ret = ff_draw_init2(&ass->draw, inlink->format,
                         ass_get_color_space(ass->track->YCbCrMatrix, inlink->colorspace),
                         ass_get_color_range(ass->track->YCbCrMatrix, inlink->color_range),
-                        ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
+                        inlink->alpha_mode, ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
     if (ret < 0) {
         av_log(ctx, AV_LOG_ERROR, "Failed to initialize FFDrawContext\n");
         return ret;
@@ -262,10 +268,7 @@ static const AVFilterPad ass_inputs[] = {
 
 static const AVOption ass_options[] = {
     COMMON_OPTIONS
-    {"shaping", "set shaping engine", OFFSET(shaping), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 1, FLAGS, .unit = "shaping_mode"},
-        {"auto", NULL,                 0, AV_OPT_TYPE_CONST, {.i64 = -1},                  INT_MIN, INT_MAX, FLAGS, .unit = "shaping_mode"},
-        {"simple",  "simple shaping",  0, AV_OPT_TYPE_CONST, {.i64 = ASS_SHAPING_SIMPLE},  INT_MIN, INT_MAX, FLAGS, .unit = "shaping_mode"},
-        {"complex", "complex shaping", 0, AV_OPT_TYPE_CONST, {.i64 = ASS_SHAPING_COMPLEX}, INT_MIN, INT_MAX, FLAGS, .unit = "shaping_mode"},
+    SHAPING_OPTIONS
     {NULL},
 };
 
@@ -316,6 +319,7 @@ static const AVOption subtitles_options[] = {
 #if FF_ASS_FEATURE_WRAP_UNICODE
     {"wrap_unicode", "break lines according to the Unicode Line Breaking Algorithm", OFFSET(wrap_unicode), AV_OPT_TYPE_BOOL, { .i64 = -1 }, -1, 1, FLAGS },
 #endif
+    SHAPING_OPTIONS
     {NULL},
 };
 

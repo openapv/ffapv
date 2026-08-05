@@ -309,7 +309,7 @@ static void check_mc(VP8DSPContext *d)
                         CLEAR_BUF_RECT(dst1);
                         call_ref(dst0, dst0_stride, src, SRC_BUF_STRIDE, height, mx, my);
                         call_new(dst1, dst1_stride, src, SRC_BUF_STRIDE, height, mx, my);
-                        checkasm_check_padded(uint8_t, dst0, dst0_stride, dst1, dst1_stride, size, height, "dst");
+                        checkasm_check_rect_padded(dst0, dst0_stride, dst1, dst1_stride, size, height, "dst");
                         bench_new(dst1, size, src, SRC_BUF_STRIDE, height, mx, my);
                     }
                 }
@@ -510,7 +510,8 @@ static void checkasm_check_vp78dsp(VP8DSPContext *d, bool is_vp7)
 
 void checkasm_check_vp8dsp(void)
 {
-    VP8DSPContext d;
+    // Needs to be zeroed because not all size 16 epel functions exist.
+    VP8DSPContext d = { 0 };
 
     ff_vp78dsp_init(&d);
     check_mc(&d);
