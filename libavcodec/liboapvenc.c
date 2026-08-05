@@ -69,6 +69,12 @@ typedef struct ApvEncContext {
     oapv_frms_t ifrms;      // frames for input
 
     int preset_id;          // preset of apv ( fastest, fast, medium, slow, placebo)
+    
+    int family_id;          // apv family:
+                            // 1. High quality mezzanine                    APV 422 HQ 4:2:2
+                            // 2. Standard quality mezzanine                APV 422 SQ 4:2:2
+                            // 3. Editing-friendly low-data-rate workflows  APV 422 LQ 4:2:2
+                            // 4. Finishing                                 APV 444 UQ 4:4:4
 
     int qp;                 // quantization parameter (QP) [0,63]
 
@@ -80,6 +86,31 @@ typedef struct ApvEncContext {
 
     AVDictionary *oapv_params;
 } ApvEncContext;
+
+static int check_family_conf(AVCodecContext* avctx, ApvEncContext* apv){
+
+    int p = apv->cdsc.param[FRM_IDX].profile_idc; // profile idc information 
+
+    switch(apv->family_id) {
+    case OAPV_FAMILY_422_LQ:
+    case OAPV_FAMILY_422_SQ:
+    case OAPV_FAMILY_422_HQ:
+        if(p != OAPV_PROFILE_422_10) {
+            av_log(avctx, AV_LOG_WARNING, "Family idc (%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
+            return AVERROR_INVALIDDATA;
+        }
+        break;
+    case OAPV_FAMILY_444_UQ:
+        if(p != OAPV_PROFILE_444_10) {
+            av_log(avctx, AV_LOG_WARNING, "Family idc(%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
+            return AVERROR_INVALIDDATA;
+        }
+        break;
+    default:
+        return AVERROR_INVALIDDATA; // invalid/unknown family
+    }
+    return 0;
+}
 
 static int apv_imgb_release(oapv_imgb_t *imgb)
 {
@@ -394,7 +425,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     const AVDictionaryEntry *en = NULL;
     while ((en = av_dict_iterate(apv->oapv_params, en))) {
         ret = oapve_param_parse(&cdsc->param[FRM_IDX], en->key, en->value);
-        if (ret < 0) {
+        if (OAPV_FAILED(ret)) {
             av_log(avctx, AV_LOG_WARNING, "Error parsing option '%s = %s'.\n", en->key, en->value);
         }
     }
@@ -405,6 +436,20 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 
     avctx->profile = cdsc->param[FRM_IDX].profile_idc;
 
+    // family to bitrate conversion
+    if (apv->family_id) {
+        ret = check_family_conf(avctx, apv);
+        if (ret == AVERROR_INVALIDDATA) {
+            return AVERROR_EXTERNAL;
+        }
+
+        int kbps = 0;
+        ret = oapve_family_bitrate(apv->family_id, cdsc->param[FRM_IDX].w, cdsc->param[FRM_IDX].h, cdsc->param[FRM_IDX].fps_num, cdsc->param[FRM_IDX].fps_den, &kbps);
+        if (OAPV_FAILED(ret)) {
+            return AVERROR_EXTERNAL;
+        }
+        cdsc->param[FRM_IDX].bitrate = kbps;
+    }
 
     return 0;
 }
@@ -669,9 +714,14 @@ static const AVOption liboapv_options[] = {
     { "placebo", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_PLACEBO }, 0, 0, VE, .unit = "preset" },
     { "default", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_PRESET_DEFAULT }, 0, 0, VE, .unit = "preset" },
 
+    { "family", "APV Family", OFFSET(family_id), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, OAPV_FAMILY_444_UQ, VE, .unit = "family" },
+    { "422_LQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_LQ },  0, 0, VE, .unit = "family" },
+    { "422_SQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_SQ },  0, 0, VE, .unit = "family" },
+    { "422_HQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_HQ },  0, 0, VE, .unit = "family" },
+    { "444_UQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_444_UQ },  0, 0, VE, .unit = "family" },
+
     { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 63, VE, .unit = NULL },
     { "oapv-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(oapv_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE, .unit = NULL },
-
     { NULL }
 };
 
