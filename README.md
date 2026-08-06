@@ -10,6 +10,83 @@ This project additionally provides **APV family/profile selection** for the Open
 
 Rest functionallities are the same as in pure ffmpeg.  
 
+# Encoding with liboapv
+
+The APV encoder is selected with `-c:v liboapv`. Supported input pixel formats:
+`gray10`, `yuv422p10`, `yuv422p12`, `yuv444p10`, `yuv444p12`, `yuva444p10`, `yuva444p12`.
+
+Encoder options:
+
+| Option | Values | Description |
+|---|---|---|
+| `-family` | `422_LQ`, `422_SQ`, `422_HQ`, `444_UQ` | APV family. Sets the target bitrate for the resolution/frame rate and switches to ABR rate control. The family must match the profile implied by the pixel format (422 families need a 4:2:2 input, `444_UQ` needs 4:4:4). |
+| `-b:v` | e.g. `200M` | Target bitrate (ABR). Ignored when `-family` is used. |
+| `-qp` | 0–63 (default 32) | Quantization parameter for constant-QP mode. Used when neither `-b:v` nor `-family` is given. |
+| `-preset` | `fastest`, `fast`, `medium`, `slow`, `placebo` | Speed/quality trade-off. |
+| `-oapv-params` | `key=value:key=value` | Pass options directly to the OpenAPV library, e.g. `qp=30:tile-w=512`. |
+
+## Examples
+
+Encode to a raw APV bitstream:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 output.apv
+
+Encode into MP4 (the `apv1` sample entry is used):
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 output.mp4
+
+Encode with an APV family (recommended; picks the standard bitrate for the
+resolution and frame rate):
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -family 422_HQ output.mp4
+
+4:4:4 finishing quality:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv444p10 -family 444_UQ output.mp4
+
+Explicit target bitrate instead of a family:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -b:v 200M output.mp4
+
+Constant-QP encoding with a slower preset:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -qp 25 -preset slow output.mp4
+
+Fine-grained control through OpenAPV parameters:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -oapv-params "qp=30:tile-w=512:tile-h=512" output.mp4
+
+Decode APV (FFmpeg's native APV decoder is used automatically):
+
+    ffmpeg -i input.mp4 -pix_fmt yuv422p10 output.yuv
+
+# Building
+
+Prerequisites: a C compiler, `make`, `cmake`, `pkg-config`, and `nasm`
+(or configure FFmpeg with `--disable-x86asm`).
+
+1. Build and install the OpenAPV library:
+
+       git clone https://github.com/AcademySoftwareFoundation/openapv.git
+       cmake -S openapv -B openapv/build -DCMAKE_BUILD_TYPE=Release
+       cmake --build openapv/build -j
+       sudo cmake --install openapv/build
+
+2. Configure and build FFmpeg with the liboapv encoder enabled:
+
+       git clone https://github.com/openapv/ffapv.git
+       cd ffapv
+       ./configure --enable-liboapv
+       make -j
+
+   If OpenAPV is installed in a non-default prefix, point pkg-config at it:
+
+       PKG_CONFIG_PATH=/path/to/prefix/lib/pkgconfig ./configure --enable-liboapv
+
+3. Verify the encoder is available:
+
+       ./ffmpeg -h encoder=liboapv
+
 # FFmpeg README
 
 FFmpeg is a collection of libraries and tools to process multimedia content
