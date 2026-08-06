@@ -521,9 +521,10 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         int kbps = 0;
         ret = oapve_family_bitrate(apv->family_id, cdsc->param[FRM_IDX].w, cdsc->param[FRM_IDX].h, cdsc->param[FRM_IDX].fps_num, cdsc->param[FRM_IDX].fps_den, &kbps);
         if (OAPV_FAILED(ret)) {
-            return AVERROR_EXTERNAL;
+            return apv_map_error(avctx, ret);
         }
         cdsc->param[FRM_IDX].bitrate = kbps;
+        cdsc->param[FRM_IDX].rc_type = OAPV_RC_ABR;
     }
 
     return 0;
