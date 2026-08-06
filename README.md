@@ -119,22 +119,39 @@ Decode APV (FFmpeg's native APV decoder is used automatically):
 
 # Building
 
-Prerequisites: a C compiler, `make`, `cmake`, `pkg-config`, and `nasm`
-(or configure FFmpeg with `--disable-x86asm`).
+Two components are built in order: the OpenAPV library
+(https://github.com/AcademySoftwareFoundation/openapv, CMake), then FFmpeg
+itself, which finds OpenAPV through `pkg-config` (`oapv.pc` is installed by
+the OpenAPV build).
+
+Common prerequisites: a C compiler, `make`, `cmake`, `pkg-config`, `git`, and
+`nasm` for the x86 assembly optimizations (or configure FFmpeg with
+`--disable-x86asm` to build without them).
+
+## Linux
+
+Install the build dependencies (Debian/Ubuntu):
+
+    sudo apt-get install build-essential cmake git pkg-config nasm
+
+Optional FFmpeg features pull in extra packages; the CI build
+(`.github/workflows/build.yml`) installs the full list, including
+`libsdl2-dev` for ffplay.
 
 1. Build and install the OpenAPV library:
 
        git clone https://github.com/AcademySoftwareFoundation/openapv.git
        cmake -S openapv -B openapv/build -DCMAKE_BUILD_TYPE=Release
-       cmake --build openapv/build -j
+       cmake --build openapv/build -j$(nproc)
        sudo cmake --install openapv/build
+       sudo ldconfig
 
 2. Configure and build FFmpeg with the liboapv encoder enabled:
 
        git clone https://github.com/openapv/ffapv.git
        cd ffapv
        ./configure --enable-liboapv
-       make -j
+       make -j$(nproc)
 
    If OpenAPV is installed in a non-default prefix, point pkg-config at it:
 
@@ -143,6 +160,51 @@ Prerequisites: a C compiler, `make`, `cmake`, `pkg-config`, and `nasm`
 3. Verify the encoder is available:
 
        ./ffmpeg -h encoder=liboapv
+
+## Windows (MinGW-w64)
+
+Windows builds use the MinGW-w64 toolchain. FFmpeg's build system needs a
+POSIX shell, which [MSYS2](https://www.msys2.org/) provides. Install MSYS2,
+open the **MSYS2 MINGW64** shell and install the tools:
+
+    pacman -S --needed base-devel git \
+        mingw-w64-x86_64-toolchain \
+        mingw-w64-x86_64-cmake \
+        mingw-w64-x86_64-ninja \
+        mingw-w64-x86_64-nasm \
+        mingw-w64-x86_64-pkgconf
+
+1. Build and install OpenAPV into the MinGW prefix:
+
+       git clone https://github.com/AcademySoftwareFoundation/openapv.git
+       cmake -S openapv -B openapv/build -G Ninja \
+           -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/mingw64
+       cmake --build openapv/build
+       cmake --install openapv/build
+
+2. Configure and build FFmpeg in the same shell:
+
+       git clone https://github.com/openapv/ffapv.git
+       cd ffapv
+       ./configure --enable-liboapv
+       make -j$(nproc)
+
+3. The resulting `ffmpeg.exe` depends on `liboapv.dll` (in `/mingw64/bin`)
+   and the MinGW runtime DLLs; keep them next to the executable or in `PATH`
+   when running outside the MSYS2 shell.
+
+Building with MSVC is possible (FFmpeg's `--toolchain=msvc` from an MSYS2
+shell started inside a Visual Studio Developer Command Prompt, OpenAPV with
+the Visual Studio CMake generator), but the MinGW-w64 route above is the
+simpler and better-tested path.
+
+The same MinGW-w64 toolchain also works from a Linux host if you prefer
+cross-compiling: build OpenAPV with the toolchain file it ships
+(`-DCMAKE_TOOLCHAIN_FILE=windows_x86_64_toolchain.cmake`), then configure
+FFmpeg with `--enable-cross-compile --target-os=mingw32 --arch=x86_64
+--cross-prefix=x86_64-w64-mingw32- --pkg-config=pkg-config` and point
+`PKG_CONFIG_LIBDIR` / `--extra-cflags` / `--extra-ldflags` at the OpenAPV
+install prefix.
 
 # FFmpeg README
 
