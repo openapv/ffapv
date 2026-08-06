@@ -54,6 +54,34 @@ static inline int64_t rescale_rational(AVRational a, int b)
     return av_rescale(a.num, b, a.den);
 }
 
+static void *apv_mem_malloc(void *udata, unsigned int size)
+{
+    return av_malloc(size);
+}
+
+static void *apv_mem_calloc(void *udata, unsigned int count, unsigned int size)
+{
+    return av_calloc(count, size);
+}
+
+static void *apv_mem_realloc(void *udata, void *ptr, unsigned int size)
+{
+    return av_realloc(ptr, size);
+}
+
+static void apv_mem_free(void *udata, void *ptr)
+{
+    av_free(ptr);
+}
+
+static const oapv_ops_mem_t apv_mem_ops = {
+    .magic   = OAPV_OPS_MAGIC_CODE_MEM,
+    .malloc  = apv_mem_malloc,
+    .calloc  = apv_mem_calloc,
+    .realloc = apv_mem_realloc,
+    .free    = apv_mem_free,
+};
+
 /**
  * The structure stores all the states associated with the instance of APV encoder
  */
@@ -421,6 +449,7 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 
     cdsc->max_bs_buf_size = MAX_BS_BUF; /* maximum bitstream buffer size */
     cdsc->max_num_frms = MAX_NUM_FRMS;
+    cdsc->ops_mem = &apv_mem_ops;
 
     const AVDictionaryEntry *en = NULL;
     while ((en = av_dict_iterate(apv->oapv_params, en))) {
@@ -522,6 +551,7 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
 {
     ApvEncContext *apv = avctx->priv_data;
     oapve_cdesc_t *cdsc = &apv->cdsc;
+    oapvm_cdesc_t mdsc = { .ops_mem = &apv_mem_ops };
     unsigned char *bs_buf;
     int ret;
 
@@ -554,7 +584,7 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
     }
 
     /* create metadata handler */
-    apv->mid = oapvm_create(&ret);
+    apv->mid = oapvm_create(&mdsc, &ret);
     if (apv->mid == NULL || OAPV_FAILED(ret)) {
         av_log(avctx, AV_LOG_ERROR, "cannot create OAPV metadata handler\n");
         return AVERROR_EXTERNAL;
