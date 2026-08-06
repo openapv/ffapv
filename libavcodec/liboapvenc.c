@@ -368,6 +368,52 @@ static int apv_metadata_add_payload(const AVCodecContext *avctx, ApvEncContext *
 }
 
 /**
+ * Translate a liboapv error code into an AVERROR, logging the offending value
+ *
+ * @param[in] avctx codec context
+ * @param[in] err liboapv error code
+ *
+ * @return negative AVERROR code
+ */
+static int apv_map_error(AVCodecContext *avctx, int err)
+{
+    const ApvEncContext *apv = avctx->priv_data;
+    const oapve_param_t *param = &apv->cdsc.param[FRM_IDX];
+
+    switch (err) {
+    case OAPV_ERR_INVALID_PROFILE:
+        av_log(avctx, AV_LOG_ERROR, "Invalid profile idc: %d\n", param->profile_idc);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_INVALID_LEVEL:
+        av_log(avctx, AV_LOG_ERROR, "Invalid level idc: %d\n", param->level_idc);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_INVALID_BAND:
+        av_log(avctx, AV_LOG_ERROR, "Invalid band idc: %d\n", param->band_idc);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_INVALID_WIDTH:
+    case OAPV_ERR_INVALID_HEIGHT:
+        av_log(avctx, AV_LOG_ERROR, "Invalid frame size: %dx%d\n", param->w, param->h);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_INVALID_FPS:
+        av_log(avctx, AV_LOG_ERROR, "Invalid frame rate: %d/%d\n", param->fps_num, param->fps_den);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_INVALID_QP:
+        av_log(avctx, AV_LOG_ERROR, "Invalid QP: %d\n", param->qp);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_INVALID_FAMILY:
+        av_log(avctx, AV_LOG_ERROR, "Invalid family idc: %d\n", apv->family_id);
+        return AVERROR(EINVAL);
+    case OAPV_ERR_OUT_OF_MEMORY:
+        return AVERROR(ENOMEM);
+    case OAPV_ERR_UNSUPPORTED:
+    case OAPV_ERR_UNSUPPORTED_COLORSPACE:
+        return AVERROR(ENOSYS);
+    }
+
+    return AVERROR_EXTERNAL;
+}
+
+/**
  * Populate the liboapv configuration from AVCodecContext and encoder options.
  *
  * AVCodecContext fields are applied first, followed by liboapv private options
@@ -502,9 +548,13 @@ static int handle_side_data(AVCodecContext *avctx, ApvEncContext *apv)
         apv->cll.max_cll  = cll->MaxCLL;
         apv->cll.max_fall = cll->MaxFALL;
 
-        oapvm_write_cll(&apv->cll, payload, &size);
+        int ret = oapvm_write_cll(&apv->cll, payload, &size);
+        if (OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Cannot write content light level metadata\n");
+            return AVERROR(EINVAL);
+        }
 
-        int ret = apv_metadata_add_payload(avctx, apv, 1, OAPV_METADATA_CLL, payload, size);
+        ret = apv_metadata_add_payload(avctx, apv, 1, OAPV_METADATA_CLL, payload, size);
         if (ret < 0) {
             av_log(avctx, AV_LOG_WARNING, "Error adding content light metadata\n");
             return ret;
@@ -528,9 +578,13 @@ static int handle_side_data(AVCodecContext *avctx, ApvEncContext *apv)
         apv->mdcv.max_mastering_luminance = rescale_rational(mdcv->max_luminance, 10000);
         apv->mdcv.min_mastering_luminance = rescale_rational(mdcv->min_luminance, 10000);
 
-        oapvm_write_mdcv(&apv->mdcv, payload, &size);
+        int ret = oapvm_write_mdcv(&apv->mdcv, payload, &size);
+        if (OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Cannot write mastering display metadata\n");
+            return AVERROR(EINVAL);
+        }
 
-        int ret = apv_metadata_add_payload(avctx, apv, 1, OAPV_METADATA_MDCV, payload, size);
+        ret = apv_metadata_add_payload(avctx, apv, 1, OAPV_METADATA_MDCV, payload, size);
         if (ret < 0) {
             av_log(avctx, AV_LOG_WARNING, "Error adding master display metadata\n");
             return ret;
@@ -578,9 +632,7 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
     apv->id = oapve_create(cdsc, &ret);
     if (apv->id == NULL) {
         av_log(avctx, AV_LOG_ERROR, "Cannot create OAPV encoder\n");
-        if (ret == OAPV_ERR_INVALID_LEVEL)
-            av_log(avctx, AV_LOG_ERROR, "Invalid level idc: %d\n", cdsc->param[0].level_idc);
-        return AVERROR_EXTERNAL;
+        return apv_map_error(avctx, ret);
     }
 
     /* create metadata handler */
@@ -607,7 +659,7 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
 
     int value = OAPV_CFG_VAL_AU_BS_FMT_NONE;
     int size = 4;
-    ret = oapve_config(apv->id, OAPV_CFG_SET_AU_BS_FMT, &value, &size);
+    ret = oapve_config(apv->id, OAPV_CFG_FRM(OAPV_CFG_SET_AU_BS_FMT, FRM_IDX), &value, &size);
     if (OAPV_FAILED(ret)) {
         av_log(avctx, AV_LOG_ERROR, "Failed to set config for using encoder output format\n");
         return AVERROR_EXTERNAL;
