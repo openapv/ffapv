@@ -21,7 +21,7 @@ Encoder options:
 |---|---|---|
 | `-family` | `422_LQ`, `422_SQ`, `422_HQ`, `444_UQ` | APV family. Sets the target bitrate for the resolution/frame rate and switches to ABR rate control. The family must match the profile implied by the pixel format (422 families need a 4:2:2 input, `444_UQ` needs 4:4:4). |
 | `-b:v` | e.g. `200M` | Target bitrate (ABR). Ignored when `-family` is used. |
-| `-qp` | 0–63 (default 32) | Quantization parameter for constant-QP mode. Used when neither `-b:v` nor `-family` is given. |
+| `-qp` | 0–63 for 10-bit, 0–75 for 12-bit input (default 32) | Quantization parameter for constant-QP mode. Used when neither `-b:v` nor `-family` is given. |
 | `-preset` | `fastest`, `fast`, `medium`, `slow`, `placebo` | Speed/quality trade-off. |
 | `-oapv-params` | `key=value:key=value` | Pass options directly to the OpenAPV library, e.g. `qp=30:tile-w=512`. |
 
