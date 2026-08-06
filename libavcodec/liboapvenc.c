@@ -668,7 +668,8 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
 
     int value = OAPV_CFG_VAL_AU_BS_FMT_NONE;
     int size = 4;
-    ret = oapve_config(apv->id, OAPV_CFG_FRM(OAPV_CFG_SET_AU_BS_FMT, FRM_IDX), &value, &size);
+    /* AU-global config: no OAPV_CFG_FRM() frame index (only per-frame configs take one) */
+    ret = oapve_config(apv->id, OAPV_CFG_SET_AU_BS_FMT, &value, &size);
     if (OAPV_FAILED(ret)) {
         av_log(avctx, AV_LOG_ERROR, "Failed to set config for using encoder output format\n");
         return AVERROR_EXTERNAL;
