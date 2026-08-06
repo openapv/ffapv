@@ -46,6 +46,7 @@
 #define MAX_NUM_FRMS (1)           // supports only 1-frame in an access unit
 #define FRM_IDX      (0)           // supports only 1-frame in an access unit
 #define MAX_NUM_CC   (OAPV_MAX_CC) // Max number of color components (upto 4:4:4:4)
+#define MAX_QP(bd)   (63 + ((bd) - 10) * 6) // same rule as liboapv's MAX_QUANT(BD)
 
 #define MAX_METADATA_PAYLOADS (8)
 
@@ -457,6 +458,13 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         cdsc->param[FRM_IDX].profile_idc = avctx->profile;
     }
     cdsc->param[FRM_IDX].preset = apv->preset_id;
+
+    int max_qp = MAX_QP(av_pix_fmt_desc_get(avctx->pix_fmt)->comp[0].depth);
+    if (apv->qp > max_qp) {
+        av_log(avctx, AV_LOG_ERROR, "QP %d out of range for %s input (max %d)\n",
+               apv->qp, av_get_pix_fmt_name(avctx->pix_fmt), max_qp);
+        return AVERROR(EINVAL);
+    }
     cdsc->param[FRM_IDX].qp = apv->qp;
     if (avctx->bit_rate / 1000 > INT_MAX || avctx->rc_max_rate / 1000 > INT_MAX) {
         av_log(avctx, AV_LOG_ERROR, "bit_rate and rc_max_rate > %d000 is not supported\n", INT_MAX);
@@ -803,7 +811,7 @@ static const AVOption liboapv_options[] = {
     { "422_HQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_HQ },  0, 0, VE, .unit = "family" },
     { "444_UQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_444_UQ },  0, 0, VE, .unit = "family" },
 
-    { "qp", "Quantization parameter value for CQP rate control mode", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, 63, VE, .unit = NULL },
+    { "qp", "Quantization parameter value for CQP rate control mode (max 63 for 10-bit, 75 for 12-bit input)", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, MAX_QP(12), VE, .unit = NULL },
     { "oapv-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(oapv_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE, .unit = NULL },
     { NULL }
 };
