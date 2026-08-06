@@ -23,7 +23,32 @@ Encoder options:
 | `-b:v` | e.g. `200M` | Target bitrate (ABR). Ignored when `-family` is used. |
 | `-qp` | 0–63 for 10-bit, 0–75 for 12-bit input (default 32) | Quantization parameter for constant-QP mode. Used when neither `-b:v` nor `-family` is given. |
 | `-preset` | `fastest`, `fast`, `medium`, `slow`, `placebo` | Speed/quality trade-off. |
-| `-oapv-params` | `key=value:key=value` | Pass options directly to the OpenAPV library, e.g. `qp=30:tile-w=512`. |
+| `-oapv-params` | `key=value:key=value` | Pass options directly to the OpenAPV library, e.g. `qp=30:tile-w=512`. See below. |
+
+## OpenAPV parameters (`-oapv-params`)
+
+`-oapv-params` forwards a `:`-separated list of `key=value` pairs to
+`oapve_param_parse()` in the OpenAPV library. An invalid pair is reported as a
+warning and skipped; valid pairs are still applied.
+
+| Key | Values | Description |
+|---|---|---|
+| `profile` | `422-10`, `422-12`, `444-10`, `444-12`, `4444-10`, `4444-12`, `400-10`, `4444-16C12` | Override the profile (normally derived from the pixel format). |
+| `level` | `auto`, `1`, `1.1`, … `7.1` | Level idc. |
+| `band` | `auto`, `0`–`3` | Band idc. |
+| `preset` | `fastest`, `fast`, `medium`, `slow`, `placebo` | Same as `-preset`. |
+| `qp` | 0–63 (10-bit), 0–75 (12-bit) | Quantization parameter (CQP). |
+| `qp-offset-c1` / `-c2` / `-c3` | integer | Per-component QP offset added to `qp`. |
+| `bitrate` | e.g. `100000`, `100000k`, `100m` | Target bitrate in kbps; switches to ABR. |
+| `q-matrix-c0` … `q-matrix-c3` | 64 space-separated values | Custom quantization matrix per component. |
+| `tile-w`, `tile-h` | multiple of 16; min 256 / 128 | Tile size in pixels. |
+| `color-primaries` | `bt709`, `bt470m`, `bt470bg`, `smpte170m`, `smpte240m`, … | Color primaries written into the bitstream. |
+| `color-transfer` | `bt709`, … | Transfer characteristics. |
+| `color-matrix` | `bt709`, … | Matrix coefficients. |
+| `color-range` | `limited`/`tv`, `full`/`pc` | Full range flag. |
+
+`width`, `height` and `fps` are also accepted but normally come from the input
+stream; setting them here is only useful for special cases.
 
 ## Examples
 
@@ -52,9 +77,41 @@ Constant-QP encoding with a slower preset:
 
     ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -qp 25 -preset slow output.mp4
 
+12-bit encoding (QP range extends to 75):
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p12 -qp 70 output.mp4
+
+4:4:4:4 with alpha (4444 profile; APV families do not cover alpha profiles):
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuva444p10 -qp 30 output.mp4
+
+Grayscale (400 profile):
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt gray10 output.mp4
+
+MOV container for NLE workflows:
+
+    ffmpeg -i input.mp4 -c:v liboapv -pix_fmt yuv422p10 -family 422_SQ output.mov
+
+Re-wrap a raw .apv bitstream into MP4 without re-encoding:
+
+    ffmpeg -i input.apv -c:v copy output.mp4
+
 Fine-grained control through OpenAPV parameters:
 
     ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -oapv-params "qp=30:tile-w=512:tile-h=512" output.mp4
+
+Target bitrate and level through OpenAPV parameters:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -oapv-params "bitrate=50m:level=4.1" output.mp4
+
+Chroma QP offsets:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -oapv-params "qp=30:qp-offset-c1=2:qp-offset-c2=2" output.mp4
+
+Color description signalling:
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt yuv422p10 -oapv-params "color-primaries=bt709:color-transfer=bt709:color-matrix=bt709:color-range=full" output.mp4
 
 Decode APV (FFmpeg's native APV decoder is used automatically):
 
