@@ -251,3 +251,21 @@ GPL. Please refer to the LICENSE file for detailed information.
 Patches should be submitted to the ffmpeg-devel mailing list using
 `git format-patch` or `git send-email`. Github pull requests should be
 avoided because they are not part of our review process and will be ignored.
+
+# Contributing to ffapv
+
+The section above describes upstream FFmpeg. **This repository is different:
+contributions are made through GitHub pull requests.**
+
+1. Fork the repository and create a feature branch from `main`.
+2. Build and test your change (see the Building section above; `test/build.sh`
+   and `test/run_test.sh` cover the basic encode/decode paths).
+3. Keep commit subjects to a single line and sign off your commits
+   (`git commit -s`).
+4. Open a pull request against `main` with a short description of what the
+   change does and how it was tested.
+
+When opening a PR from a fork, please **enable "Allow edits from
+maintainers"**. It lets maintainers rebase your branch or apply small review
+fixes directly instead of going through another request/response round trip,
+which can shorten the review cycle considerably.
