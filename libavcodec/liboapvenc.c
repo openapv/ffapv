@@ -27,6 +27,7 @@
 #include <oapv/oapv.h>
 
 #include "libavutil/avassert.h"
+#include "libavutil/hdr_dynamic_metadata.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/internal.h"
@@ -40,6 +41,7 @@
 #include "apv.h"
 #include "codec_internal.h"
 #include "encode.h"
+#include "itut35.h"
 #include "profiles.h"
 
 #define MAX_BS_BUF   (128 * 1024 * 1024)
@@ -112,6 +114,8 @@ typedef struct ApvEncContext {
 
     oapvm_payload_t *payloads;
     unsigned nb_payloads;
+
+    int t35_set;            // an HDR10+ T.35 payload is currently attached to mid
 
     AVDictionary *oapv_params;
 } ApvEncContext;
@@ -692,6 +696,57 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
     return 0;
 }
 
+static int handle_hdr10plus(AVCodecContext *avctx, ApvEncContext *apv,
+                            const AVFrame *frame)
+{
+    const AVFrameSideData *sd =
+        av_frame_get_side_data(frame, AV_FRAME_DATA_DYNAMIC_HDR_PLUS);
+    uint8_t *buf, *payload;
+    size_t payload_size;
+    int ret;
+
+    if (!sd) {
+        if (apv->t35_set) {
+            oapvm_rem(apv->mid, 1 /* group_id of the primary frame */,
+                      OAPV_METADATA_ITU_T_T35, NULL);
+            apv->t35_set = 0;
+        }
+        return 0;
+    }
+
+    ret = av_dynamic_hdr_plus_to_t35((const AVDynamicHDRPlus *)sd->data,
+                                     NULL, &payload_size);
+    if (ret < 0)
+        return ret;
+
+    buf = av_malloc(payload_size + 6);
+    if (!buf)
+        return AVERROR(ENOMEM);
+
+    buf[0] = ITU_T_T35_COUNTRY_CODE_US;
+    AV_WB16(buf + 1, ITU_T_T35_PROVIDER_CODE_SAMSUNG);
+    AV_WB16(buf + 3, 1); // provider_oriented_code
+    buf[5] = 4;          // application_identifier
+    payload = buf + 6;
+
+    ret = av_dynamic_hdr_plus_to_t35((const AVDynamicHDRPlus *)sd->data,
+                                     &payload, &payload_size);
+    if (ret < 0) {
+        av_free(buf);
+        return ret;
+    }
+
+    // oapvm_set() copies the payload and replaces an existing one of the same type
+    ret = oapvm_set(apv->mid, 1 /* group_id of the primary frame */,
+                    OAPV_METADATA_ITU_T_T35, buf, payload_size + 6);
+    av_free(buf);
+    if (OAPV_FAILED(ret))
+        return apv_map_error(avctx, ret);
+    apv->t35_set = 1;
+
+    return 0;
+}
+
 /**
   * Encode raw data frame into APV packet
   *
@@ -719,6 +774,10 @@ static int liboapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
     frm->group_id = 1; // @todo FIX-ME : need to set properly in case of multi-frame
     frm->pbu_type = OAPV_PBU_TYPE_PRIMARY_FRAME;
+
+    ret = handle_hdr10plus(avctx, apv, frame);
+    if (ret < 0)
+        return ret;
 
     ret = oapve_encode(apv->id, &apv->ifrms, apv->mid, &apv->bitb, &apv->stat, NULL);
     if (OAPV_FAILED(ret)) {
