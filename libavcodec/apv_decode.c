@@ -87,6 +87,16 @@ static int apv_decode_check_format(AVCodecContext *avctx,
         return AVERROR_PATCHWELCOME;
     }
 
+    // An identity matrix on a 444 stream means the planes are G, B, R (H.273)
+    if (header->color_description_present_flag &&
+        header->matrix_coefficients == 0 &&
+        header->frame_info.chroma_format_idc == APV_CHROMA_FORMAT_444) {
+        if (pix_fmt == AV_PIX_FMT_YUV444P10)
+            pix_fmt = AV_PIX_FMT_GBRP10;
+        else if (pix_fmt == AV_PIX_FMT_YUV444P12)
+            pix_fmt = AV_PIX_FMT_GBRP12;
+    }
+
     if (avctx->coded_width != coded_width ||
         avctx->coded_height != coded_height) {
         err = ff_set_dimensions(avctx, coded_width, coded_height);
