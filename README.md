@@ -216,6 +216,12 @@ The encoder is selected with `-c:v libxeve`. Supported input pixel formats:
 `CRF`) with `-qp` (0–51) or `-crf` (10–49), and `-xeve-params` for passing
 `key=value` pairs directly to the xeve library.
 
+HDR metadata is carried through EVC as well: HDR10 mastering display /
+content light level and dynamic HDR10+ (SMPTE ST 2094-40) are written as SEI
+messages on encoding and restored as frame side data on decoding (see
+[HDR metadata over EVC](#hdr-metadata-over-evc)). xeve and xevd 0.7.0 or
+newer are required (the versions that provide the per-picture SEI API).
+
 ## Examples
 
 Encode to EVC with the main profile and a target bitrate:
@@ -229,6 +235,32 @@ Constant-QP encoding:
 Decode EVC:
 
     ffmpeg -i input.mp4 output.yuv
+
+## HDR metadata over EVC
+
+HDR metadata carried by the input is written into the EVC bitstream as SEI
+messages (ISO/IEC 23094-1 Annex D) on encoding and restored as frame side
+data on decoding:
+
+- static HDR10: mastering display colour volume and content light level SEI
+- dynamic HDR10+ (SMPTE ST 2094-40), carried in a user-data-registered
+  ITU-T T.35 SEI message
+
+No extra options are needed; a plain transcode keeps the metadata:
+
+    ffmpeg -i hdr10plus_input.mp4 -c:v libxeve -profile main output.mp4
+
+To check the metadata, decode and look for the side data entries:
+
+    ffprobe -show_frames -show_entries frame=side_data_list output.mp4
+
+Static metadata can also be attached explicitly when the source has none:
+
+    ffmpeg -f lavfi \
+        -mastering_display "G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(10000000,1)" \
+        -content_light "1000,200" \
+        -i testsrc2=size=1920x1080:rate=30 \
+        -c:v libxeve -profile main -pix_fmt yuv420p10 -frames:v 30 output.mp4
 
 # Building
 

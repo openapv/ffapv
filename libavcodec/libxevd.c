@@ -27,6 +27,8 @@
 
 #include "libavutil/internal.h"
 #include "libavutil/common.h"
+#include "libavutil/intreadwrite.h"
+#include "libavutil/mastering_display_metadata.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/imgutils.h"
@@ -35,6 +37,7 @@
 #include "avcodec.h"
 #include "codec_internal.h"
 #include "evc.h"
+#include "itut35.h"
 #include "profiles.h"
 #include "decode.h"
 
@@ -276,6 +279,85 @@ static av_cold int libxevd_init(AVCodecContext *avctx)
     return 0;
 }
 
+/**
+ * Restore the SEI payloads exposed on a decoded picture as frame side data.
+ */
+static int libxevd_export_sei(AVCodecContext *avctx, AVFrame *frame,
+                              const XEVD_SEI *sei)
+{
+    int ret;
+
+    for (int i = 0; i < sei->num_payloads; i++) {
+        const XEVD_SEI_PAYLOAD *pl = &sei->payloads[i];
+        const uint8_t *p = pl->payload;
+
+        switch (pl->payload_type) {
+        case XEVD_SEI_MASTERING_DISPLAY_INFO:
+            {
+                AVMasteringDisplayMetadata *m;
+                // H.265-style payload: primaries in G, B, R order,
+                // chromaticities in 1/50000, luminance in 1/10000 cd/m^2
+                static const int mapping[3] = { 2, 0, 1 };
+
+                if (pl->payload_size < 24)
+                    break;
+
+                ret = ff_decode_mastering_display_new(avctx, frame, &m);
+                if (ret < 0)
+                    return ret;
+
+                if (m) {
+                    for (int c = 0; c < 3; c++) {
+                        const int j = mapping[c];
+                        m->display_primaries[c][0] = av_make_q(AV_RB16(p + j * 4),     50000);
+                        m->display_primaries[c][1] = av_make_q(AV_RB16(p + j * 4 + 2), 50000);
+                    }
+                    m->white_point[0] = av_make_q(AV_RB16(p + 12), 50000);
+                    m->white_point[1] = av_make_q(AV_RB16(p + 14), 50000);
+                    m->max_luminance  = av_make_q(AV_RB32(p + 16), 10000);
+                    m->min_luminance  = av_make_q(AV_RB32(p + 20), 10000);
+                    m->has_primaries = 1;
+                    m->has_luminance = 1;
+                }
+            }
+            break;
+        case XEVD_SEI_CONTENT_LIGHT_LEVEL_INFO:
+            {
+                AVContentLightMetadata *c;
+
+                if (pl->payload_size < 4)
+                    break;
+
+                ret = ff_decode_content_light_new(avctx, frame, &c);
+                if (ret < 0)
+                    return ret;
+
+                if (c) {
+                    c->MaxCLL  = AV_RB16(p);
+                    c->MaxFALL = AV_RB16(p + 2);
+                }
+            }
+            break;
+        case XEVD_SEI_USER_DATA_REGISTERED_ITU_T_T35:
+            {
+                FFITUTT35 t35 = { 0 };
+
+                ret = ff_itut_t35_parse_buffer(&t35, p, pl->payload_size, 0);
+                if (ret == 1) {
+                    ret = ff_itut_t35_parse_payload_to_frame(&t35, NULL, avctx, frame);
+                    if (ret < 0)
+                        return ret;
+                }
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    return 0;
+}
+
 static int libxevd_return_frame(AVCodecContext *avctx, AVFrame *frame,
                                 XEVD_IMGB *imgb, AVPacket **pkt_au)
 {
@@ -327,6 +409,21 @@ static int libxevd_return_frame(AVCodecContext *avctx, AVFrame *frame,
     frame->pts = xevd_pts_pop_min(avctx->priv_data);
     if (frame->pts == AV_NOPTS_VALUE) // no usable input pts; keep xevd's estimate
         frame->pts = imgb->ts[XEVD_TS_PTS];
+
+    if (imgb->ndata[XEVD_IMGB_SEI_SLOT] == XEVD_SEI_MAGIC &&
+        imgb->pdata[XEVD_IMGB_SEI_SLOT]) {
+        ret = libxevd_export_sei(avctx, frame,
+                                 (const XEVD_SEI *)imgb->pdata[XEVD_IMGB_SEI_SLOT]);
+        if (ret < 0) {
+            av_packet_free(&pkt_au_imgb);
+            av_frame_unref(frame);
+
+            imgb->release(imgb);
+            imgb = NULL;
+
+            return ret;
+        }
+    }
 
     av_packet_free(&pkt_au_imgb);
 
