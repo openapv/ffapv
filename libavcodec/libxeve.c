@@ -455,12 +455,15 @@ static int libxeve_encode(AVCodecContext *avctx, AVPacket *avpkt,
         }
     }
     if (xectx->state == STATE_ENCODING || xectx->state == STATE_BUMPING) {
-        /* encoding */
-        ret = xeve_encode(xectx->id, &(xectx->bitb), &(xectx->stat));
-        if (XEVE_FAILED(ret)) {
-            av_log(avctx, AV_LOG_ERROR, "xeve_encode() failed\n");
-            return AVERROR_EXTERNAL;
-        }
+        /* encoding; while bumping, XEVE_OK_OUT_NOT_AVAILABLE means "call again",
+         * not end of stream, so keep going until a packet or NO_MORE_FRM */
+        do {
+            ret = xeve_encode(xectx->id, &(xectx->bitb), &(xectx->stat));
+            if (XEVE_FAILED(ret)) {
+                av_log(avctx, AV_LOG_ERROR, "xeve_encode() failed\n");
+                return AVERROR_EXTERNAL;
+            }
+        } while (xectx->state == STATE_BUMPING && ret == XEVE_OK_OUT_NOT_AVAILABLE);
 
         /* store bitstream */
         if (ret == XEVE_OK_OUT_NOT_AVAILABLE) { // Return OK but picture is not available yet
