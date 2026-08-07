@@ -514,11 +514,20 @@ static int apv_receive_frame_internal(AVCodecContext *avctx, AVFrame *frame)
 
         switch (pbu->type) {
         case APV_PBU_PRIMARY_FRAME:
+            // Metadata PBUs may be placed after the frame in the AU.
+            for (int j = 0; j < au->nb_units; j++) {
+                if (au->units[j].type == APV_PBU_METADATA) {
+                    err = apv_decode_metadata(avctx, frame,
+                                              au->units[j].content);
+                    if (err < 0)
+                        return err;
+                }
+            }
             err = apv_decode(avctx, frame, pbu->content);
             i++;
             goto end;
         case APV_PBU_METADATA:
-            apv_decode_metadata(avctx, frame, pbu->content);
+            // Applied alongside the primary frame.
             break;
         case APV_PBU_NON_PRIMARY_FRAME:
         case APV_PBU_PREVIEW_FRAME:
