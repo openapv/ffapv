@@ -42,7 +42,8 @@ On top of that, this project provides:
 ## Encoding with liboapv
 
 The APV encoder is selected with `-c:v liboapv`. Supported input pixel formats:
-`gray10`, `yuv422p10`, `yuv422p12`, `yuv444p10`, `yuv444p12`, `yuva444p10`, `yuva444p12`.
+`gray10`, `yuv422p10`, `yuv422p12`, `yuv444p10`, `yuv444p12`, `yuva444p10`,
+`yuva444p12`, `gbrp10`, `gbrp12` (planar RGB).
 
 Encoder options:
 
@@ -117,6 +118,11 @@ Constant-QP encoding with a slower preset:
 Grayscale (400 profile):
 
     ffmpeg -i input.mov -c:v liboapv -pix_fmt gray10 output.mp4
+
+RGB content without YUV conversion (coded as a 444 profile with the identity
+matrix signalled; decodes back to `gbrp10`/`gbrp12`):
+
+    ffmpeg -i input.mov -c:v liboapv -pix_fmt gbrp10 output.mp4
 
 MOV container for NLE workflows:
 
