@@ -184,6 +184,10 @@ static inline int get_color_format(enum AVPixelFormat pix_fmt)
         return OAPV_CF_YCBCR4444;
     case AV_PIX_FMT_YUVA444P12:
         return OAPV_CF_YCBCR4444;
+    case AV_PIX_FMT_GBRP10:
+    case AV_PIX_FMT_GBRP12:
+        // RGB rides on the 444 carrier; plane order G, B, R matches H.273
+        return OAPV_CF_YCBCR444;
     }
 }
 
@@ -199,6 +203,8 @@ static inline int get_chroma_format_idc(enum AVPixelFormat pix_fmt)
         return APV_CHROMA_FORMAT_422;
     case AV_PIX_FMT_YUV444P10:
     case AV_PIX_FMT_YUV444P12:
+    case AV_PIX_FMT_GBRP10:
+    case AV_PIX_FMT_GBRP12:
         return APV_CHROMA_FORMAT_444;
     case AV_PIX_FMT_YUVA444P10:
     case AV_PIX_FMT_YUVA444P12:
@@ -218,8 +224,10 @@ static inline int get_min_profile(enum AVPixelFormat pix_fmt)
     case AV_PIX_FMT_YUV422P12:
         return AV_PROFILE_APV_422_12;
     case AV_PIX_FMT_YUV444P10:
+    case AV_PIX_FMT_GBRP10:
         return AV_PROFILE_APV_444_10;
     case AV_PIX_FMT_YUV444P12:
+    case AV_PIX_FMT_GBRP12:
         return AV_PROFILE_APV_444_12;
     case AV_PIX_FMT_YUVA444P10:
         return AV_PROFILE_APV_4444_10;
@@ -460,6 +468,18 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
 
     if (avctx->color_range != AVCOL_RANGE_UNSPECIFIED) {
         cdsc->param[FRM_IDX].full_range_flag = (avctx->color_range == AVCOL_RANGE_JPEG);
+        cdsc->param[FRM_IDX].color_description_present_flag = 1;
+    }
+
+    /* RGB input is coded as 444 with the identity matrix signalled (H.273) */
+    if (av_pix_fmt_desc_get(avctx->pix_fmt)->flags & AV_PIX_FMT_FLAG_RGB) {
+        if (avctx->colorspace != AVCOL_SPC_UNSPECIFIED &&
+            avctx->colorspace != AVCOL_SPC_RGB)
+            av_log(avctx, AV_LOG_WARNING, "RGB input: overriding matrix coefficients %d with identity.\n",
+                   avctx->colorspace);
+        cdsc->param[FRM_IDX].matrix_coefficients = 0;
+        if (avctx->color_range == AVCOL_RANGE_UNSPECIFIED)
+            cdsc->param[FRM_IDX].full_range_flag = 1;
         cdsc->param[FRM_IDX].color_description_present_flag = 1;
     }
 
@@ -872,5 +892,6 @@ const FFCodec ff_liboapv_encoder = {
     CODEC_PIXFMTS(AV_PIX_FMT_GRAY10,
                   AV_PIX_FMT_YUV422P10,  AV_PIX_FMT_YUV422P12,
                   AV_PIX_FMT_YUV444P10,  AV_PIX_FMT_YUV444P12,
-                  AV_PIX_FMT_YUVA444P10, AV_PIX_FMT_YUVA444P12),
+                  AV_PIX_FMT_YUVA444P10, AV_PIX_FMT_YUVA444P12,
+                  AV_PIX_FMT_GBRP10,     AV_PIX_FMT_GBRP12),
 };
