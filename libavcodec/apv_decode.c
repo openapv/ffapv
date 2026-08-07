@@ -32,6 +32,7 @@
 #include "codec_internal.h"
 #include "decode.h"
 #include "internal.h"
+#include "itut35.h"
 #include "thread.h"
 #include "hwconfig.h"
 #include "hwaccel_internal.h"
@@ -491,6 +492,24 @@ static int apv_decode_metadata(AVCodecContext *avctx, AVFrame *frame,
                 if (clm) {
                     clm->MaxCLL  = cll->max_cll;
                     clm->MaxFALL = cll->max_fall;
+                }
+            }
+            break;
+        case APV_METADATA_ITU_T_T35:
+            {
+                const APVRawMetadataITUTT35 *t35 = &pl->itu_t_t35;
+                FFITUTT35 itut_t35 = {
+                    .country_code = t35->itu_t_t35_country_code,
+                };
+
+                err = ff_itut_t35_parse_buffer(&itut_t35, t35->data,
+                                               t35->data_size,
+                                               FF_ITUT_T35_FLAG_COUNTRY_CODE);
+                if (err == 1) {
+                    err = ff_itut_t35_parse_payload_to_frame(&itut_t35, NULL,
+                                                             avctx, frame);
+                    if (err < 0)
+                        return err;
                 }
             }
             break;
