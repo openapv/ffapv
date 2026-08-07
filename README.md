@@ -1,16 +1,40 @@
 [![Build OAPV_FFmpeg](https://github.com/openapv/ffapv/actions/workflows/build.yml/badge.svg)](https://github.com/openapv/ffapv/actions/workflows/build.yml)
 
-# FFmpeg with OpenAPV support
+# ffapv — FFmpeg plus up-to-date codec integrations
 
-This project contains FFmpeg project implementation with added support for APV codec using fully OpenAPV library.  
-https://github.com/AcademySoftwareFoundation/openapv
+This project delivers FFmpeg plus the latest codec integration work. Its
+purpose is fast source distribution: improvements and fixes for the codec
+wrappers are developed, reviewed and released here, so that users can pick
+them up quickly without waiting for the next FFmpeg release cycle.
 
-Pure FFmpeg currently have OpenAPV encoder and native APV decoder only.
-This project additionally provides **APV family/profile selection** for the OpenAPV encoder (`-family` option: 422_LQ, 422_SQ, 422_HQ, 444_UQ).
+The maintained codec integrations are:
 
-Rest functionallities are the same as in pure ffmpeg.  
+- **APV** — encoding through the [OpenAPV](https://github.com/AcademySoftwareFoundation/openapv) library, decoding through FFmpeg's native APV decoder
+- **EVC** — encoding through [xeve](https://github.com/mpeg5/xeve), decoding through [xevd](https://github.com/mpeg5/xevd)
 
-# Encoding with liboapv
+The FFmpeg code base itself is updated regularly from upstream FFmpeg, so the
+tree stays close to current FFmpeg while carrying the newest codec patches on
+top. Everything outside the integrations listed above works the same as in
+pure FFmpeg. The project is intended to be registered as a project under the
+[Academy Software Foundation](https://www.aswf.io/), alongside OpenAPV.
+
+## Branches
+
+| Branch | Content |
+|---|---|
+| `main` | The distribution branch: current FFmpeg base plus the latest codec patches. |
+| `upstream` | Pristine FFmpeg, no local patches. Updated regularly from upstream FFmpeg and then merged into `main`. |
+| feature branches | Work in progress, opened as pull requests against `main`. |
+
+# APV (OpenAPV)
+
+Pure FFmpeg currently has the OpenAPV encoder and a native APV decoder.
+On top of that, this project provides **APV family/profile selection** for the
+OpenAPV encoder (`-family` option: 422_LQ, 422_SQ, 422_HQ, 444_UQ), keeps the
+wrapper in sync with the evolving OpenAPV library API, and carries encoder
+fixes ahead of their arrival in FFmpeg releases.
+
+## Encoding with liboapv
 
 The APV encoder is selected with `-c:v liboapv`. Supported input pixel formats:
 `gray10`, `yuv422p10`, `yuv422p12`, `yuv444p10`, `yuv444p12`, `yuva444p10`, `yuva444p12`.
@@ -25,7 +49,7 @@ Encoder options:
 | `-preset` | `fastest`, `fast`, `medium`, `slow`, `placebo` | Speed/quality trade-off. |
 | `-oapv-params` | `key=value:key=value` | Pass options directly to the OpenAPV library, e.g. `qp=30:tile-w=512`. See below. |
 
-## OpenAPV parameters (`-oapv-params`)
+### OpenAPV parameters (`-oapv-params`)
 
 `-oapv-params` forwards a `:`-separated list of `key=value` pairs to
 `oapve_param_parse()` in the OpenAPV library. An invalid pair is reported as a
@@ -116,6 +140,33 @@ Color description signalling:
 Decode APV (FFmpeg's native APV decoder is used automatically):
 
     ffmpeg -i input.mp4 -pix_fmt yuv422p10 output.yuv
+
+# EVC (xeve / xevd)
+
+EVC (MPEG-5 Essential Video Coding) support uses FFmpeg's `libxeve` encoder
+and `libxevd` decoder wrappers. They are enabled at configure time with
+`--enable-libxeve` and `--enable-libxevd` (the xeve and xevd libraries must be
+installed and visible to `pkg-config`).
+
+The encoder is selected with `-c:v libxeve`. Supported input pixel formats:
+`yuv420p`, `yuv420p10`. The main options are `-profile` (`baseline`, `main`),
+`-preset` (`fast`, `medium`, `slow`, `placebo`), `-rc_mode` (`CQP`, `ABR`,
+`CRF`) with `-qp` (0–51) or `-crf` (10–49), and `-xeve-params` for passing
+`key=value` pairs directly to the xeve library.
+
+## Examples
+
+Encode to EVC with the main profile and a target bitrate:
+
+    ffmpeg -i input.mov -c:v libxeve -profile main -b:v 5M output.mp4
+
+Constant-QP encoding:
+
+    ffmpeg -i input.mov -c:v libxeve -rc_mode CQP -qp 30 output.mp4
+
+Decode EVC:
+
+    ffmpeg -i input.mp4 output.yuv
 
 # Building
 
