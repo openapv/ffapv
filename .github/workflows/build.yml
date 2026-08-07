@@ -65,4 +65,47 @@ jobs:
         run: |
           oapv_app_enc
           ffmpeg -version
-          
+
+  build-windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Set up MSYS2 (MinGW-w64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            git
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkgconf
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and install openAPV dependency
+        run: |
+          git clone --depth 1 https://github.com/AcademySoftwareFoundation/openapv.git
+          cmake -S openapv -B openapv/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/mingw64
+          cmake --build openapv/build
+          cmake --install openapv/build
+
+      - name: Build FFmpeg
+        run: |
+          ./configure --enable-liboapv
+          make -j$(nproc)
+
+      - name: Verify run
+        run: |
+          ./ffmpeg.exe -version
+          ./ffmpeg.exe -hide_banner -h encoder=liboapv
+
