@@ -34,6 +34,7 @@
 
 #include "avcodec.h"
 #include "codec_internal.h"
+#include "evc.h"
 #include "profiles.h"
 #include "decode.h"
 
@@ -54,7 +55,37 @@ typedef struct XevdContext {
     int draining_mode; // The flag is set if codec enters draining mode.
 
     AVPacket *pkt;     // access unit (a set of NAL units that are consecutive in decoding order and containing exactly one encoded image)
+
+    // xevd overwrites the presentation timestamp with one synthesized from the
+    // decoding timestamp, so input pts are reordered here instead: frames come
+    // out in presentation order, which is ascending input pts order
+    int64_t pts_queue[EVC_MAX_NUM_REF_PICS + 8];
+    int nb_pts;
 } XevdContext;
+
+static void xevd_pts_push(XevdContext *xectx, int64_t pts)
+{
+    if (xectx->nb_pts < FF_ARRAY_ELEMS(xectx->pts_queue))
+        xectx->pts_queue[xectx->nb_pts++] = pts;
+}
+
+static int64_t xevd_pts_pop_min(XevdContext *xectx)
+{
+    int min = 0;
+    int64_t pts;
+
+    if (!xectx->nb_pts)
+        return AV_NOPTS_VALUE;
+
+    // AV_NOPTS_VALUE is INT64_MIN, so entries without a pts pop first
+    for (int i = 1; i < xectx->nb_pts; i++)
+        if (xectx->pts_queue[i] < xectx->pts_queue[min])
+            min = i;
+
+    pts = xectx->pts_queue[min];
+    xectx->pts_queue[min] = xectx->pts_queue[--xectx->nb_pts];
+    return pts;
+}
 
 /**
  * The function populates the XEVD_CDSC structure.
@@ -293,7 +324,9 @@ static int libxevd_return_frame(AVCodecContext *avctx, AVFrame *frame,
     }
 
     frame->pkt_dts = imgb->ts[XEVD_TS_DTS];
-    frame->pts = imgb->ts[XEVD_TS_PTS];
+    frame->pts = xevd_pts_pop_min(avctx->priv_data);
+    if (frame->pts == AV_NOPTS_VALUE) // no usable input pts; keep xevd's estimate
+        frame->pts = imgb->ts[XEVD_TS_PTS];
 
     av_packet_free(&pkt_au_imgb);
 
@@ -391,6 +424,7 @@ static int libxevd_receive_frame(AVCodecContext *avctx, AVFrame *frame)
 
             // stat.fnum - has negative value if the decoded data is not frame
             if (stat.fnum >= 0) {
+                xevd_pts_push(xectx, pkt_au->pts);
 
                 xevd_ret = xevd_pull(xectx->id, &imgb); // The function returns a valid image only if the return code is XEVD_OK
 
