@@ -573,19 +573,20 @@ static int handle_side_data(AVCodecContext *avctx, ApvEncContext *apv)
     if (mdcv_sd) {
         AVMasteringDisplayMetadata *mdcv = (AVMasteringDisplayMetadata *)mdcv_sd->data;
 
-        // According to APV specification, i = 0, 1, 2 specifies Red, Green, Blue respectively
-        apv->mdcv.primary_chromaticity_x[0] = rescale_rational(mdcv->display_primaries[0][0], 50000); // Red X
-        apv->mdcv.primary_chromaticity_y[0] = rescale_rational(mdcv->display_primaries[0][1], 50000); // Red Y
-        apv->mdcv.primary_chromaticity_x[1] = rescale_rational(mdcv->display_primaries[1][0], 50000); // Green X
-        apv->mdcv.primary_chromaticity_y[1] = rescale_rational(mdcv->display_primaries[1][1], 50000); // Green Y
-        apv->mdcv.primary_chromaticity_x[2] = rescale_rational(mdcv->display_primaries[2][0], 50000); // Blue X
-        apv->mdcv.primary_chromaticity_y[2] = rescale_rational(mdcv->display_primaries[2][1], 50000); // Blue Y
+        // RFC 9924: chromaticities are 0.16 fixed point, max luminance 24.8,
+        // min luminance 18.14 (i = 0, 1, 2 specifies Red, Green, Blue)
+        apv->mdcv.primary_chromaticity_x[0] = rescale_rational(mdcv->display_primaries[0][0], 1 << 16); // Red X
+        apv->mdcv.primary_chromaticity_y[0] = rescale_rational(mdcv->display_primaries[0][1], 1 << 16); // Red Y
+        apv->mdcv.primary_chromaticity_x[1] = rescale_rational(mdcv->display_primaries[1][0], 1 << 16); // Green X
+        apv->mdcv.primary_chromaticity_y[1] = rescale_rational(mdcv->display_primaries[1][1], 1 << 16); // Green Y
+        apv->mdcv.primary_chromaticity_x[2] = rescale_rational(mdcv->display_primaries[2][0], 1 << 16); // Blue X
+        apv->mdcv.primary_chromaticity_y[2] = rescale_rational(mdcv->display_primaries[2][1], 1 << 16); // Blue Y
 
-        apv->mdcv.white_point_chromaticity_x = rescale_rational(mdcv->white_point[0], 50000);
-        apv->mdcv.white_point_chromaticity_y = rescale_rational(mdcv->white_point[1], 50000);
+        apv->mdcv.white_point_chromaticity_x = rescale_rational(mdcv->white_point[0], 1 << 16);
+        apv->mdcv.white_point_chromaticity_y = rescale_rational(mdcv->white_point[1], 1 << 16);
 
-        apv->mdcv.max_mastering_luminance = rescale_rational(mdcv->max_luminance, 10000);
-        apv->mdcv.min_mastering_luminance = rescale_rational(mdcv->min_luminance, 10000);
+        apv->mdcv.max_mastering_luminance = rescale_rational(mdcv->max_luminance, 1 << 8);
+        apv->mdcv.min_mastering_luminance = rescale_rational(mdcv->min_luminance, 1 << 14);
 
         int ret = oapvm_write_mdcv(&apv->mdcv, payload, &size);
         if (OAPV_FAILED(ret)) {
