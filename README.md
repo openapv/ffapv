@@ -29,10 +29,15 @@ pure FFmpeg. The project is intended to be registered as a project under the
 # APV (OpenAPV)
 
 Pure FFmpeg currently has the OpenAPV encoder and a native APV decoder.
-On top of that, this project provides **APV family/profile selection** for the
-OpenAPV encoder (`-family` option: 422_LQ, 422_SQ, 422_HQ, 444_UQ), keeps the
-wrapper in sync with the evolving OpenAPV library API, and carries encoder
-fixes ahead of their arrival in FFmpeg releases.
+On top of that, this project provides:
+
+- **APV family/profile selection** for the OpenAPV encoder (`-family` option:
+  422_LQ, 422_SQ, 422_HQ, 444_UQ)
+- **HDR metadata support**: HDR10 mastering display / content light level and
+  dynamic HDR10+ (SMPTE ST 2094-40) survive both encoding and decoding
+  (see [HDR metadata](#hdr-metadata))
+- keeping the wrapper in sync with the evolving OpenAPV library API, with
+  encoder fixes carried ahead of their arrival in FFmpeg releases
 
 ## Encoding with liboapv
 
@@ -140,6 +145,57 @@ Color description signalling:
 Decode APV (FFmpeg's native APV decoder is used automatically):
 
     ffmpeg -i input.mp4 -pix_fmt yuv422p10 output.yuv
+
+## HDR metadata
+
+HDR metadata carried by the input is preserved when transcoding to APV, and
+restored as frame side data when decoding APV:
+
+- static HDR10: mastering display color volume and content light level
+  (RFC 9924 `metadata_mdcv` / `metadata_cll` payloads)
+- dynamic HDR10+ (SMPTE ST 2094-40), stored as an ITU-T T.35 metadata payload
+
+### HDR10
+
+Transcoding an HDR10 source needs no extra options; the static metadata and
+the color signalling are carried over:
+
+    ffmpeg -i hdr10_input.mp4 -c:v liboapv -pix_fmt yuv422p10 -family 422_HQ output.mp4
+
+To produce an HDR10 stream from a source that carries no metadata, attach the
+static metadata at the input and set the BT.2020/PQ signalling on the frames:
+
+    ffmpeg -f lavfi \
+        -mastering_display "G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(10000000,1)" \
+        -content_light "1000,200" \
+        -i testsrc2=size=1920x1080:rate=30 \
+        -vf "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc" \
+        -c:v liboapv -pix_fmt yuv422p10 -frames:v 30 output.mp4
+
+The color signalling can also be written through the OpenAPV parameters:
+`-oapv-params "color-primaries=bt2020:color-transfer=smpte2084:color-matrix=bt2020nc"`.
+
+### HDR10+
+
+The dynamic metadata is taken from each input frame and written into the
+matching APV access unit, so a plain transcode from an HDR10+ source (HEVC,
+AV1, ...) keeps it:
+
+    ffmpeg -i hdr10plus_input.mp4 -c:v liboapv -pix_fmt yuv422p10 -family 422_HQ output.mp4
+
+Because the metadata lives inside the APV access units, remuxing keeps it as
+well:
+
+    ffmpeg -i output.mp4 -c:v copy output.apv
+
+### Checking the result
+
+Decoding restores the metadata as frame side data; to inspect it:
+
+    ffprobe -show_frames -show_entries frame=side_data_list output.mp4
+
+Look for `Mastering display metadata`, `Content light level metadata` and
+`HDR Dynamic Metadata SMPTE2094-40 (HDR10+)` entries.
 
 # EVC (xeve / xevd)
 
