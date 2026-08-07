@@ -98,6 +98,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/mingw64
           cmake --build openapv/build
           cmake --install openapv/build
+          # openapv installs the MinGW import library outside the pkg-config
+          # library path; put a copy where -L${libdir} -loapv can find it
+          cp /mingw64/lib/import/liboapv.dll.a /mingw64/lib/ || true
 
       - name: Build FFmpeg
         run: |
