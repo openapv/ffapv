@@ -129,18 +129,18 @@ static int check_family_conf(AVCodecContext* avctx, ApvEncContext* apv){
     case OAPV_FAMILY_422_SQ:
     case OAPV_FAMILY_422_HQ:
         if(p != OAPV_PROFILE_422_10) {
-            av_log(avctx, AV_LOG_WARNING, "Family idc (%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
-            return AVERROR_INVALIDDATA;
+            av_log(avctx, AV_LOG_ERROR, "Family idc (%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
+            return AVERROR(EINVAL);
         }
         break;
     case OAPV_FAMILY_444_UQ:
         if(p != OAPV_PROFILE_444_10) {
-            av_log(avctx, AV_LOG_WARNING, "Family idc(%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
-            return AVERROR_INVALIDDATA;
+            av_log(avctx, AV_LOG_ERROR, "Family idc(%d) and profile idc (%d) are unmatched\n", apv->family_id, p);
+            return AVERROR(EINVAL);
         }
         break;
     default:
-        return AVERROR_INVALIDDATA; // invalid/unknown family
+        return AVERROR(EINVAL); // invalid/unknown family
     }
     return 0;
 }
@@ -239,10 +239,11 @@ static inline int get_min_profile(enum AVPixelFormat pix_fmt)
 static int profile_is_compatible(enum AVPixelFormat pix_fmt, int profile)
 {
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
-    const int chroma_format_idc = get_chroma_format_idc(pix_fmt);
-    const int bit_depth = desc->comp[0].depth;
+    int chroma_format_idc, bit_depth;
 
     av_assert0(desc);
+    chroma_format_idc = get_chroma_format_idc(pix_fmt);
+    bit_depth = desc->comp[0].depth;
 
     switch (profile) {
     case AV_PROFILE_APV_422_10:
@@ -469,19 +470,15 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
                apv->qp, av_get_pix_fmt_name(avctx->pix_fmt), max_qp);
         return AVERROR(EINVAL);
     }
-    cdsc->param[FRM_IDX].qp = apv->qp;
+    if (apv->qp >= 0)
+        cdsc->param[FRM_IDX].qp = apv->qp;
     if (avctx->bit_rate / 1000 > INT_MAX || avctx->rc_max_rate / 1000 > INT_MAX) {
         av_log(avctx, AV_LOG_ERROR, "bit_rate and rc_max_rate > %d000 is not supported\n", INT_MAX);
         return AVERROR(EINVAL);
     }
     cdsc->param[FRM_IDX].bitrate = (int)(avctx->bit_rate / 1000);
-    if (cdsc->param[FRM_IDX].bitrate) {
-        if (cdsc->param[FRM_IDX].qp) {
-            av_log(avctx, AV_LOG_WARNING, "You cannot set both the bitrate and the QP parameter at the same time.\n"
-                                          "If the bitrate is set, the rate control type is set to ABR, which means that the QP value is ignored.\n");
-        }
+    if (cdsc->param[FRM_IDX].bitrate)
         cdsc->param[FRM_IDX].rc_type = OAPV_RC_ABR;
-    }
 
     cdsc->threads = avctx->thread_count;
 
@@ -526,9 +523,8 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
     // family to bitrate conversion
     if (apv->family_id) {
         ret = check_family_conf(avctx, apv);
-        if (ret == AVERROR_INVALIDDATA) {
-            return AVERROR_EXTERNAL;
-        }
+        if (ret < 0)
+            return ret;
 
         int kbps = 0;
         ret = oapve_family_bitrate(apv->family_id, cdsc->param[FRM_IDX].w, cdsc->param[FRM_IDX].h, cdsc->param[FRM_IDX].fps_num, cdsc->param[FRM_IDX].fps_den, &kbps);
@@ -538,6 +534,29 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         cdsc->param[FRM_IDX].bitrate = kbps;
         cdsc->param[FRM_IDX].rc_type = OAPV_RC_ABR;
     }
+
+    /* bitrate source priority: -family > -oapv-params bitrate > -b:v */
+    const AVDictionaryEntry *params_bitrate = av_dict_get(apv->oapv_params, "bitrate", NULL, 0);
+    if (apv->family_id) {
+        if (params_bitrate || avctx->bit_rate)
+            av_log(avctx, AV_LOG_WARNING, "-family takes priority: the bitrate given with %s%s%s is ignored.\n",
+                   avctx->bit_rate ? "-b:v" : "",
+                   avctx->bit_rate && params_bitrate ? " and " : "",
+                   params_bitrate ? "-oapv-params" : "");
+    } else if (params_bitrate && avctx->bit_rate) {
+        av_log(avctx, AV_LOG_WARNING, "The bitrate from -oapv-params takes priority: -b:v is ignored.\n");
+    }
+
+    if (cdsc->param[FRM_IDX].rc_type == OAPV_RC_ABR &&
+        cdsc->param[FRM_IDX].qp != OAPVE_PARAM_QP_AUTO)
+        av_log(avctx, AV_LOG_WARNING, "QP %d applies to the first frame only; rate control adjusts it afterwards.\n",
+               cdsc->param[FRM_IDX].qp);
+
+    /* keep the wrapper's CQP-32 default; untouched, liboapv would switch to
+       ABR at the level's maximum rate */
+    if (cdsc->param[FRM_IDX].rc_type == OAPV_RC_CQP &&
+        cdsc->param[FRM_IDX].qp == OAPVE_PARAM_QP_AUTO)
+        cdsc->param[FRM_IDX].qp = 32;
 
     return 0;
 }
@@ -805,7 +824,7 @@ static int liboapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
         avpkt->pts = avpkt->dts = frame->pts;
         avpkt->flags |= AV_PKT_FLAG_KEY;
 
-        if (cdsc->param[FRM_IDX].qp)
+        if (cdsc->param[FRM_IDX].rc_type == OAPV_RC_CQP)
             ff_encode_add_stats_side_data(avpkt, cdsc->param[FRM_IDX].qp * FF_QP2LAMBDA, NULL, 0, AV_PICTURE_TYPE_I);
 
         *got_packet = 1;
@@ -872,7 +891,7 @@ static const AVOption liboapv_options[] = {
     { "422_HQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_422_HQ },  0, 0, VE, .unit = "family" },
     { "444_UQ",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = OAPV_FAMILY_444_UQ },  0, 0, VE, .unit = "family" },
 
-    { "qp", "Quantization parameter value for CQP rate control mode (max 63 for 10-bit, 75 for 12-bit input)", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = 32 }, 0, MAX_QP(12), VE, .unit = NULL },
+    { "qp", "Quantization parameter (max 63 for 10-bit, 75 for 12-bit input; CQP default 32, in ABR it seeds the first frame)", OFFSET(qp), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, MAX_QP(12), VE, .unit = NULL },
     { "oapv-params",  "Override the apv configuration using a :-separated list of key=value parameters", OFFSET(oapv_params), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE, .unit = NULL },
     { NULL }
 };
