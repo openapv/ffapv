@@ -85,6 +85,15 @@ typedef struct XeveContext {
 
     int color_format;   // input data color format: currently only XEVE_CF_YCBCR420 is supported
 
+    // xeve emits decoding timestamps that can exceed the pts or go
+    // non-monotonic for the first frame_delay pictures, so the dts is derived
+    // here instead: dts[i] = input pts[i] - reorder delay
+    int64_t in_ts[64];  // input frame pts, in input order
+    unsigned n_in;      // frames pushed to the encoder
+    unsigned n_out;     // packets received from the encoder
+    int delay;          // reorder delay in frames, -1 until the first packet
+    int64_t ts_dur;     // frame duration estimated from the first two pts
+
     AVDictionary *xeve_params;
 } XeveContext;
 
@@ -402,6 +411,7 @@ static av_cold int libxeve_init(AVCodecContext *avctx)
     imgb->h[1] = imgb->h[2] = imgb->ah[1] = imgb->ah[2] = height_chroma;
 
     xectx->state = STATE_ENCODING;
+    xectx->delay = -1;
 
     return 0;
 }
@@ -447,6 +457,10 @@ static int libxeve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 
         imgb->ts[XEVE_TS_PTS] = frame->pts;
 
+        if (xectx->n_in == 1)
+            xectx->ts_dur = frame->pts - xectx->in_ts[0];
+        xectx->in_ts[xectx->n_in++ % FF_ARRAY_ELEMS(xectx->in_ts)] = frame->pts;
+
         /* push image to encoder */
         ret = xeve_push(xectx->id, imgb);
         if (XEVE_FAILED(ret)) {
@@ -481,8 +495,12 @@ static int libxeve_encode(AVCodecContext *avctx, AVPacket *avpkt,
                 avpkt->time_base.num = xectx->cdsc.param.fps.den;
                 avpkt->time_base.den = xectx->cdsc.param.fps.num;
 
+                if (xectx->delay < 0)
+                    xectx->delay = FFMAX((int)xectx->n_in - 1, 0);
+
                 avpkt->pts = xectx->bitb.ts[XEVE_TS_PTS];
-                avpkt->dts = xectx->bitb.ts[XEVE_TS_DTS];
+                avpkt->dts = xectx->in_ts[xectx->n_out++ % FF_ARRAY_ELEMS(xectx->in_ts)] -
+                             xectx->delay * xectx->ts_dur;
 
                 enum AVPictureType av_pic_type;
                 switch(xectx->stat.stype) {
