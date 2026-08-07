@@ -219,10 +219,8 @@ The encoder is selected with `-c:v libxeve`. Supported input pixel formats:
 HDR metadata is carried through EVC as well: HDR10 mastering display /
 content light level and dynamic HDR10+ (SMPTE ST 2094-40) are written as SEI
 messages on encoding and restored as frame side data on decoding (see
-[HDR metadata over EVC](#hdr-metadata-over-evc)). This needs xeve/xevd builds
-that provide the per-picture SEI API (current master; releases after xeve
-0.6.0 / xevd 0.5.0); with older libraries the wrappers build fine but drop
-the metadata.
+[HDR metadata over EVC](#hdr-metadata-over-evc)). xeve and xevd 0.7.0 or
+newer are required (the versions that provide the per-picture SEI API).
 
 ## Examples
 
