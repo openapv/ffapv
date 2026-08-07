@@ -303,10 +303,19 @@ Patches should be submitted to the ffmpeg-devel mailing list using
 `git format-patch` or `git send-email`. Github pull requests should be
 avoided because they are not part of our review process and will be ignored.
 
-# Contributing to ffapv
+# How to contribute
 
 The section above describes upstream FFmpeg. **This repository is different:
 contributions are made through GitHub pull requests.**
+
+Pull requests are accepted **only for the codec integrations maintained
+here**: the APV pieces (the OpenAPV encoder wrapper, native decoder, parser,
+muxing/demuxing) and the EVC pieces (the xeve/xevd wrappers and related
+code). Changes to any other part of the FFmpeg code base are out of scope —
+please submit those to upstream FFmpeg following its
+[contribution process](https://ffmpeg.org/developer.html#Contributing); this
+tree merges upstream FFmpeg regularly, so fixes accepted there arrive here as
+well.
 
 1. Fork the repository and create a feature branch from `main`.
 2. Build and test your change (see the Building section above; `test/build.sh`
