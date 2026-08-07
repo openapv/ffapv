@@ -50,8 +50,6 @@
 #define MAX_NUM_CC   (OAPV_MAX_CC) // Max number of color components (upto 4:4:4:4)
 #define MAX_QP(bd)   (63 + ((bd) - 10) * 6) // same rule as liboapv's MAX_QUANT(BD)
 
-#define MAX_METADATA_PAYLOADS (8)
-
 static inline int64_t rescale_rational(AVRational a, int b)
 {
     return av_rescale(a.num, b, a.den);
@@ -108,12 +106,6 @@ typedef struct ApvEncContext {
                             // 4. Finishing                                 APV 444 UQ 4:4:4
 
     int qp;                 // quantization parameter (QP) [0,63]
-
-    oapvm_payload_mdcv_t mdcv;
-    oapvm_payload_cll_t cll;
-
-    oapvm_payload_t *payloads;
-    unsigned nb_payloads;
 
     int t35_set;            // an HDR10+ T.35 payload is currently attached to mid
 
@@ -342,37 +334,6 @@ fail:
     return NULL;
 }
 
-static int apv_metadata_add_payload(const AVCodecContext *avctx, ApvEncContext *apv,
-                                    uint32_t group_id, uint32_t type, const void *data, uint32_t size)
-{
-    oapvm_payload_t *tmp;
-
-    if (apv->nb_payloads >= MAX_METADATA_PAYLOADS || !data || size == 0) {
-        return AVERROR_INVALIDDATA;
-    }
-
-    tmp = av_realloc_array(apv->payloads, apv->nb_payloads + 1, sizeof(oapvm_payload_t));
-    if (!tmp) {
-        return AVERROR(ENOMEM);
-    }
-    apv->payloads = tmp;
-
-    // Copying data into internal buffer
-    void *new_data = av_malloc(size);
-    if (!new_data) {
-        return AVERROR(ENOMEM);
-    }
-    memcpy(new_data, data, size);
-
-    apv->payloads[apv->nb_payloads].group_id = group_id;
-    apv->payloads[apv->nb_payloads].type = type;
-    apv->payloads[apv->nb_payloads].size = size;
-    apv->payloads[apv->nb_payloads].data = new_data;
-    apv->nb_payloads++;
-
-    return 0;
-}
-
 /**
  * Translate a liboapv error code into an AVERROR, logging the offending value
  *
@@ -576,51 +537,52 @@ static int handle_side_data(AVCodecContext *avctx, ApvEncContext *apv)
 
     if (cll_sd) {
         const AVContentLightMetadata *cll = (AVContentLightMetadata *)cll_sd->data;
+        oapvm_payload_cll_t pl_cll = {
+            .max_cll  = cll->MaxCLL,
+            .max_fall = cll->MaxFALL,
+        };
 
-        apv->cll.max_cll  = cll->MaxCLL;
-        apv->cll.max_fall = cll->MaxFALL;
-
-        int ret = oapvm_write_cll(&apv->cll, payload, &size);
+        int ret = oapvm_write_cll(&pl_cll, payload, &size);
         if (OAPV_FAILED(ret)) {
             av_log(avctx, AV_LOG_ERROR, "Cannot write content light level metadata\n");
             return AVERROR(EINVAL);
         }
 
-        ret = apv_metadata_add_payload(avctx, apv, 1, OAPV_METADATA_CLL, payload, size);
-        if (ret < 0) {
-            av_log(avctx, AV_LOG_WARNING, "Error adding content light metadata\n");
-            return ret;
+        // oapvm_set() copies the payload
+        ret = oapvm_set(apv->mid, 1, OAPV_METADATA_CLL, payload, size);
+        if (OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Cannot set content light level metadata\n");
+            return apv_map_error(avctx, ret);
         }
     }
 
     if (mdcv_sd) {
-        AVMasteringDisplayMetadata *mdcv = (AVMasteringDisplayMetadata *)mdcv_sd->data;
+        const AVMasteringDisplayMetadata *mdcv = (AVMasteringDisplayMetadata *)mdcv_sd->data;
+        oapvm_payload_mdcv_t pl_mdcv;
 
         // RFC 9924: chromaticities are 0.16 fixed point, max luminance 24.8,
         // min luminance 18.14 (i = 0, 1, 2 specifies Red, Green, Blue)
-        apv->mdcv.primary_chromaticity_x[0] = rescale_rational(mdcv->display_primaries[0][0], 1 << 16); // Red X
-        apv->mdcv.primary_chromaticity_y[0] = rescale_rational(mdcv->display_primaries[0][1], 1 << 16); // Red Y
-        apv->mdcv.primary_chromaticity_x[1] = rescale_rational(mdcv->display_primaries[1][0], 1 << 16); // Green X
-        apv->mdcv.primary_chromaticity_y[1] = rescale_rational(mdcv->display_primaries[1][1], 1 << 16); // Green Y
-        apv->mdcv.primary_chromaticity_x[2] = rescale_rational(mdcv->display_primaries[2][0], 1 << 16); // Blue X
-        apv->mdcv.primary_chromaticity_y[2] = rescale_rational(mdcv->display_primaries[2][1], 1 << 16); // Blue Y
+        for (int i = 0; i < 3; i++) {
+            pl_mdcv.primary_chromaticity_x[i] = rescale_rational(mdcv->display_primaries[i][0], 1 << 16);
+            pl_mdcv.primary_chromaticity_y[i] = rescale_rational(mdcv->display_primaries[i][1], 1 << 16);
+        }
 
-        apv->mdcv.white_point_chromaticity_x = rescale_rational(mdcv->white_point[0], 1 << 16);
-        apv->mdcv.white_point_chromaticity_y = rescale_rational(mdcv->white_point[1], 1 << 16);
+        pl_mdcv.white_point_chromaticity_x = rescale_rational(mdcv->white_point[0], 1 << 16);
+        pl_mdcv.white_point_chromaticity_y = rescale_rational(mdcv->white_point[1], 1 << 16);
 
-        apv->mdcv.max_mastering_luminance = rescale_rational(mdcv->max_luminance, 1 << 8);
-        apv->mdcv.min_mastering_luminance = rescale_rational(mdcv->min_luminance, 1 << 14);
+        pl_mdcv.max_mastering_luminance = rescale_rational(mdcv->max_luminance, 1 << 8);
+        pl_mdcv.min_mastering_luminance = rescale_rational(mdcv->min_luminance, 1 << 14);
 
-        int ret = oapvm_write_mdcv(&apv->mdcv, payload, &size);
+        int ret = oapvm_write_mdcv(&pl_mdcv, payload, &size);
         if (OAPV_FAILED(ret)) {
             av_log(avctx, AV_LOG_ERROR, "Cannot write mastering display metadata\n");
             return AVERROR(EINVAL);
         }
 
-        ret = apv_metadata_add_payload(avctx, apv, 1, OAPV_METADATA_MDCV, payload, size);
-        if (ret < 0) {
-            av_log(avctx, AV_LOG_WARNING, "Error adding master display metadata\n");
-            return ret;
+        ret = oapvm_set(apv->mid, 1, OAPV_METADATA_MDCV, payload, size);
+        if (OAPV_FAILED(ret)) {
+            av_log(avctx, AV_LOG_ERROR, "Cannot set mastering display metadata\n");
+            return apv_map_error(avctx, ret);
         }
     }
 
@@ -641,9 +603,6 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
     oapvm_cdesc_t mdsc = { .ops_mem = &apv_mem_ops };
     unsigned char *bs_buf;
     int ret;
-
-    apv->nb_payloads = 0;
-    apv->payloads = NULL;
 
     /* allocate bitstream buffer */
     bs_buf = (unsigned char *)av_malloc(MAX_BS_BUF);
@@ -680,14 +639,6 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Failed handling side data! (%s)\n",
                av_err2str(ret));
         return ret;
-    }
-
-    if (apv->nb_payloads > 0) {
-        ret = oapvm_set_all(apv->mid, apv->payloads, apv->nb_payloads);
-        if (OAPV_FAILED(ret)) {
-            av_log(avctx, AV_LOG_ERROR, "cannot set metadata\n");
-            return AVERROR_EXTERNAL;
-        }
     }
 
     int value = OAPV_CFG_VAL_AU_BS_FMT_NONE;
@@ -805,7 +756,7 @@ static int liboapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
     }
 
     /* store bitstream */
-    if (OAPV_SUCCEEDED(ret) && apv->stat.write > 0) {
+    if (apv->stat.write > 0) {
         uint8_t *data = apv->bitb.addr;
         int size = apv->stat.write;
 
@@ -842,11 +793,6 @@ static int liboapve_encode(AVCodecContext *avctx, AVPacket *avpkt,
 static av_cold int liboapve_close(AVCodecContext *avctx)
 {
     ApvEncContext *apv = avctx->priv_data;
-
-    for (unsigned int i = 0; i < apv->nb_payloads; i++) {
-        av_freep(&apv->payloads[i].data);
-    }
-    av_freep(&apv->payloads);
 
     for (int i = 0; i < apv->ifrms.num_frms; i++) {
         if (apv->ifrms.frm[i].imgb != NULL)
