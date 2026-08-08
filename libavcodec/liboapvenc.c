@@ -44,7 +44,6 @@
 #include "itut35.h"
 #include "profiles.h"
 
-#define MAX_BS_BUF   (128 * 1024 * 1024)
 #define MAX_NUM_FRMS (1)           // supports only 1-frame in an access unit
 #define FRM_IDX      (0)           // supports only 1-frame in an access unit
 #define MAX_NUM_CC   (OAPV_MAX_CC) // Max number of color components (upto 4:4:4:4)
@@ -292,6 +291,40 @@ static int validate_profile(AVCodecContext *avctx, int profile)
     return 0;
 }
 
+/* worst-case bitstream buffer size for one frame, following the reference
+   encoder: raw samples doubled as entropy-coding margin, per-macroblock tile
+   overhead, plus slack for the AU/frame headers and metadata */
+static int apv_max_bs_buf_size(AVCodecContext *avctx)
+{
+    int spp2; // sample bytes per two pixels
+    int64_t sz, mbs;
+
+    switch (get_color_format(avctx->pix_fmt)) {
+    case OAPV_CF_YCBCR400:
+        spp2 = 2;
+        break;
+    case OAPV_CF_YCBCR422:
+        spp2 = 4;
+        break;
+    case OAPV_CF_YCBCR444:
+        spp2 = 6;
+        break;
+    case OAPV_CF_YCBCR4444:
+        spp2 = 8;
+        break;
+    default:
+        return AVERROR(EINVAL);
+    }
+
+    sz  = (int64_t)avctx->width * avctx->height * spp2 * 2;
+    mbs = (int64_t)((avctx->width + 15) >> 4) * ((avctx->height + 15) >> 4);
+    sz += mbs * 40 + 16 * 1024;
+    if (sz > INT_MAX)
+        return AVERROR(EINVAL);
+
+    return (int)sz;
+}
+
 static oapv_imgb_t *apv_imgb_create(AVCodecContext *avctx)
 {
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(avctx->pix_fmt);
@@ -483,7 +516,6 @@ static int get_conf(AVCodecContext *avctx, oapve_cdesc_t *cdsc)
         cdsc->param[FRM_IDX].color_description_present_flag = 1;
     }
 
-    cdsc->max_bs_buf_size = MAX_BS_BUF; /* maximum bitstream buffer size */
     cdsc->max_num_frms = MAX_NUM_FRMS;
     cdsc->ops_mem = &apv_mem_ops;
 
@@ -622,16 +654,23 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
     oapve_cdesc_t *cdsc = &apv->cdsc;
     oapvm_cdesc_t mdsc = { .ops_mem = &apv_mem_ops };
     unsigned char *bs_buf;
+    int bs_buf_size;
     int ret;
 
-    /* allocate bitstream buffer */
-    bs_buf = (unsigned char *)av_malloc(MAX_BS_BUF);
+    /* allocate a worst-case bitstream buffer for the frame size */
+    bs_buf_size = apv_max_bs_buf_size(avctx);
+    if (bs_buf_size < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Cannot size bitstream buffer for %dx%d\n",
+               avctx->width, avctx->height);
+        return bs_buf_size;
+    }
+    bs_buf = (unsigned char *)av_malloc(bs_buf_size);
     if (bs_buf == NULL) {
-        av_log(avctx, AV_LOG_ERROR, "Cannot allocate bitstream buffer, size=%d\n", MAX_BS_BUF);
+        av_log(avctx, AV_LOG_ERROR, "Cannot allocate bitstream buffer, size=%d\n", bs_buf_size);
         return AVERROR(ENOMEM);
     }
     apv->bitb.addr = bs_buf;
-    apv->bitb.bsize = MAX_BS_BUF;
+    apv->bitb.bsize = bs_buf_size;
 
     /* read configurations and set values for created descriptor (APV_CDSC) */
     ret = get_conf(avctx, cdsc);
@@ -639,6 +678,7 @@ static av_cold int liboapve_init(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Cannot get OAPV configuration\n");
         return ret;
     }
+    cdsc->max_bs_buf_size = bs_buf_size;
 
     /* create encoder */
     apv->id = oapve_create(cdsc, &ret);
