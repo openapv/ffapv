@@ -7,10 +7,9 @@ purpose is fast source distribution: improvements and fixes for the codec
 wrappers are developed, reviewed and released here, so that users can pick
 them up quickly without waiting for the next FFmpeg release cycle.
 
-The maintained codec integrations are:
+The maintained codec integration is:
 
 - **APV** — encoding through the [OpenAPV](https://github.com/AcademySoftwareFoundation/openapv) library, decoding through FFmpeg's native APV decoder
-- **EVC** — encoding through [xeve](https://github.com/mpeg5/xeve), decoding through [xevd](https://github.com/mpeg5/xevd)
 
 The FFmpeg code base itself is updated regularly from upstream FFmpeg, so the
 tree stays close to current FFmpeg while carrying the newest codec patches on
@@ -206,65 +205,6 @@ Decoding restores the metadata as frame side data; to inspect it:
 Look for `Mastering display metadata`, `Content light level metadata` and
 `HDR Dynamic Metadata SMPTE2094-40 (HDR10+)` entries.
 
-# EVC (xeve / xevd)
-
-EVC (MPEG-5 Essential Video Coding) support uses FFmpeg's `libxeve` encoder
-and `libxevd` decoder wrappers. They are enabled at configure time with
-`--enable-libxeve` and `--enable-libxevd` (the xeve and xevd libraries must be
-installed and visible to `pkg-config`).
-
-The encoder is selected with `-c:v libxeve`. Supported input pixel formats:
-`yuv420p`, `yuv420p10`. The main options are `-profile` (`baseline`, `main`),
-`-preset` (`fast`, `medium`, `slow`, `placebo`), `-rc_mode` (`CQP`, `ABR`,
-`CRF`) with `-qp` (0–51) or `-crf` (10–49), and `-xeve-params` for passing
-`key=value` pairs directly to the xeve library.
-
-HDR metadata is carried through EVC as well: HDR10 mastering display /
-content light level and dynamic HDR10+ (SMPTE ST 2094-40) are written as SEI
-messages on encoding and restored as frame side data on decoding (see
-[HDR metadata over EVC](#hdr-metadata-over-evc)). xeve and xevd 0.7.0 or
-newer are required (the versions that provide the per-picture SEI API).
-
-## Examples
-
-Encode to EVC with the main profile and a target bitrate:
-
-    ffmpeg -i input.mov -c:v libxeve -profile main -b:v 5M output.mp4
-
-Constant-QP encoding:
-
-    ffmpeg -i input.mov -c:v libxeve -rc_mode CQP -qp 30 output.mp4
-
-Decode EVC:
-
-    ffmpeg -i input.mp4 output.yuv
-
-## HDR metadata over EVC
-
-HDR metadata carried by the input is written into the EVC bitstream as SEI
-messages (ISO/IEC 23094-1 Annex D) on encoding and restored as frame side
-data on decoding:
-
-- static HDR10: mastering display colour volume and content light level SEI
-- dynamic HDR10+ (SMPTE ST 2094-40), carried in a user-data-registered
-  ITU-T T.35 SEI message
-
-No extra options are needed; a plain transcode keeps the metadata:
-
-    ffmpeg -i hdr10plus_input.mp4 -c:v libxeve -profile main output.mp4
-
-To check the metadata, decode and look for the side data entries:
-
-    ffprobe -show_frames -show_entries frame=side_data_list output.mp4
-
-Static metadata can also be attached explicitly when the source has none:
-
-    ffmpeg -f lavfi \
-        -mastering_display "G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(10000000,1)" \
-        -content_light "1000,200" \
-        -i testsrc2=size=1920x1080:rate=30 \
-        -c:v libxeve -profile main -pix_fmt yuv420p10 -frames:v 30 output.mp4
-
 # Building
 
 Two components are built in order: the OpenAPV library
@@ -369,10 +309,9 @@ Contributions to upstream FFmpeg follow [its own process](https://ffmpeg.org/dev
 **This repository is different: contributions are made through GitHub pull
 requests.**
 
-Pull requests are accepted **only for the codec integrations maintained
+Pull requests are accepted **only for the codec integration maintained
 here**: the APV pieces (the OpenAPV encoder wrapper, native decoder, parser,
-muxing/demuxing) and the EVC pieces (the xeve/xevd wrappers and related
-code). Changes to any other part of the FFmpeg code base are out of scope —
+muxing/demuxing). Changes to any other part of the FFmpeg code base are out of scope —
 please submit those to upstream FFmpeg following its
 [contribution process](https://ffmpeg.org/developer.html#Contributing); this
 tree merges upstream FFmpeg regularly, so fixes accepted there arrive here as
