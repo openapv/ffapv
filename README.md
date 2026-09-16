@@ -14,7 +14,9 @@ The maintained codec integrations are:
 
 The FFmpeg code base itself is updated regularly from upstream FFmpeg, so the
 tree stays close to current FFmpeg while carrying the newest codec patches on
-top. Everything outside the integrations listed above works the same as in
+top. The current base is the `release/9.0` branch at commit `3a7c002718`
+(2026-09-15), which includes all fixes through the `n9.0.1` maintenance
+release. Everything outside the integrations listed above works the same as in
 pure FFmpeg. The project is intended to be registered as a project under the
 [Academy Software Foundation](https://www.aswf.io/), alongside OpenAPV.
 
