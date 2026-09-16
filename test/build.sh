@@ -60,7 +60,7 @@ if [ ! -f config.h ]; then
     --enable-ffplay \
     --enable-liboapv \
     --extra-cflags="-I$OAPV_BLD/include" \
-    --extra-ldflags="-L$OAPV_BLD/lib -Wl,-rpath,$OAPV_BLD/lib"
+    --extra-ldflags="-L$OAPV_BLD/lib -Wl,--disable-new-dtags -Wl,-rpath,$OAPV_BLD/lib"
 else
   echo "   (기존 config.h 재사용 — 재configure하려면 config.h 삭제 후 실행)"
 fi
